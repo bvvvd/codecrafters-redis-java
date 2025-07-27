@@ -63,7 +63,7 @@ public final class Set extends AbstractRedisCommand {
                 throw new RedisException("SET command requires a valid number for expiration time");
             }
         }
-        return expirationTime;
+        return -1;
     }
 
     @Override
