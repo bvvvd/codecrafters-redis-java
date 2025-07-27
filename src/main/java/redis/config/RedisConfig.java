@@ -1,6 +1,6 @@
 package redis.config;
 
-import redis.RedisException;
+import redis.exception.RedisException;
 
 public class RedisConfig {
     private static final String REPLICATION_ID = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb";
