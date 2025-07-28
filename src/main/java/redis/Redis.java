@@ -6,6 +6,7 @@ import redis.exception.RedisException;
 import redis.replication.ReplicationService;
 import redis.resp.RespValue;
 
+import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.List;
@@ -31,11 +32,15 @@ public class Redis implements AutoCloseable {
         this.commandBuilder = new RedisCommandBuilder(config, new ConcurrentHashMap<>(), replicationService);
     }
 
-    public void serve() {
+    public void serve() throws IOException {
+        if (config.getRole().equalsIgnoreCase("slave")) {
+            replicationService.establish(config);
+        }
+
         try (ServerSocket server = new ServerSocket(config.getPort())) {
             server.setReuseAddress(true);
             while (!Thread.currentThread().isInterrupted()) {
-                debug("Redis server is running on port %d", config.getPort());
+                debug("Redis %s is running on port %d", config.getRole(), config.getPort());
                 Socket client = server.accept();
                 clientListeners.submit(() -> {
                     while (client.isConnected()) {
@@ -61,6 +66,6 @@ public class Redis implements AutoCloseable {
     public void close() {
         clientListeners.shutdown();
         replicationService.close();
-        debug("RedisCommunicator has been closed.");
+        debug("Redis has been closed.");
     }
 }

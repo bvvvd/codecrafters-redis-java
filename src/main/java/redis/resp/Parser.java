@@ -16,7 +16,8 @@ public class Parser {
 
         AtomicInteger offset = new AtomicInteger();
         List<RespValue> values = new ArrayList<>();
-        while (offset.get() < input.length && input[offset.get()] != 0) {
+        while (offset.get() < input.length && input[offset.get()] != 0
+               && input[offset.get()] != '\n' && input[offset.get()] != '\r') {
             values.add(parse(input, offset));
         }
         return values;
@@ -338,8 +339,7 @@ public class Parser {
         int start = offset.get();
         StringBuilder builder = new StringBuilder();
         offset.incrementAndGet();
-        while (offset.get() + 1 < input.length && input[offset.get() + 1] != '\n'
-               && input[offset.get()] != '\r') {
+        while (offset.get() < input.length && input[offset.get()] != '\r') {
             builder.append((char) input[offset.get()]);
             offset.incrementAndGet();
         }
