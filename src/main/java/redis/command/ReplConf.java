@@ -6,6 +6,7 @@ import redis.exception.RedisException;
 import redis.replication.ReplicationService;
 import redis.resp.RespArray;
 import redis.resp.RespBulkString;
+import redis.resp.RespSimpleString;
 import redis.resp.RespValue;
 
 import java.util.List;
@@ -73,7 +74,7 @@ public final class ReplConf extends AbstractRedisCommand {
 //                }
                 yield null;
             }
-            case CAPA, LISTENING_PORT -> new RespBulkString("OK");
+            case CAPA, LISTENING_PORT -> new RespSimpleString("OK");
             case GET_ACK ->
                     new RespArray(List.of(new RespBulkString("REPLCONF"), new RespBulkString("ACK"), new RespBulkString(Long.toString(replicationService.getOffset()))));
         };

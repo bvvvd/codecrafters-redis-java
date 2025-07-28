@@ -6,6 +6,7 @@ import redis.config.RedisConfig;
 import redis.exception.RedisException;
 import redis.replication.ReplicationService;
 import redis.resp.RespBulkString;
+import redis.resp.RespSimpleString;
 import redis.resp.RespValue;
 
 import java.util.Arrays;
@@ -74,9 +75,11 @@ public final class Set extends AbstractRedisCommand {
         } else {
             debug("Replica SET received, caching: %s", this);
         }
+        debug("cache before: %s", cache);
         cache.put(key, new CachedValue<>(value, expirationTime));
+        debug("cache after: %s", cache);
         if (isMaster) {
-            RespBulkString response = new RespBulkString("OK");
+            RespSimpleString response = new RespSimpleString("OK");
             replicationService.propagate(this);
 
             sendResponse(client, response);

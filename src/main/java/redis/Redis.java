@@ -1,5 +1,6 @@
 package redis;
 
+import redis.cache.CachedValue;
 import redis.command.RedisCommand;
 import redis.config.RedisConfig;
 import redis.exception.RedisException;
@@ -9,11 +10,10 @@ import redis.resp.RespValue;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.ServerSocket;
 import java.nio.channels.ServerSocketChannel;
-import java.nio.channels.SocketChannel;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -24,7 +24,6 @@ public class Redis implements AutoCloseable {
     private final RedisConfig config;
     private final ExecutorService clientListeners;
     private final Parser parser;
-    //    private final RedisReceiver receiver;
     private final RedisCommandBuilder commandBuilder;
     private final ReplicationService replicationService;
 
@@ -32,9 +31,9 @@ public class Redis implements AutoCloseable {
         this.config = config;
         this.clientListeners = Executors.newVirtualThreadPerTaskExecutor();
         this.parser = new Parser();
-//        this.receiver = new RedisReceiver();
-        this.replicationService = new ReplicationService(Executors.newVirtualThreadPerTaskExecutor(), 0, config);
-        this.commandBuilder = new RedisCommandBuilder(config, new ConcurrentHashMap<>(), replicationService);
+        ConcurrentMap<RespValue, CachedValue<RespValue>> cache = new ConcurrentHashMap<>();
+        this.replicationService = new ReplicationService(Executors.newVirtualThreadPerTaskExecutor(), 0, config, cache);
+        this.commandBuilder = new RedisCommandBuilder(config, cache, replicationService);
     }
 
     public void serve() throws IOException {
@@ -53,16 +52,21 @@ public class Redis implements AutoCloseable {
                 clientListeners.submit(() -> {
                     while (client.isConnected()) {
                         try {
-                            List<RespValue> readValues = parser.parse(client.read(256).get());
-                            List<RedisCommand> commands = commandBuilder.build(readValues);
-                            commands.forEach(command -> command.handle(client));
+                            client.read(256).ifPresent(read -> {
+                                List<RespValue> respValues = parser.parse(read);
+                                List<RedisCommand> commands = commandBuilder.build(respValues);
+                                commands.forEach(command -> command.handle(client));
+                            });
                         } catch (Exception e) {
                             error("Error serving client: %s%n", e.getMessage());
                             throw new RedisException(e);
                         }
                     }
+
+                    debug("Client disconnected: %s", client);
                 });
             }
+            debug("nu kak-to menya tut bit ne dolzhno");
         } catch (Exception e) {
             debug("Failed to start Redis server on port %d: %s%n", config.getPort(), e.getMessage());
         } finally {

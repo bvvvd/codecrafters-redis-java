@@ -19,7 +19,9 @@ public class Parser {
         while (offset.get() < input.length && input[offset.get()] != 0
                && input[offset.get()] != '\n' && input[offset.get()] != '\r') {
             values.add(parse(input, offset));
+//            offset.incrementAndGet();
         }
+        debug("Parsed RESP values: %s", values);
         return values;
     }
 
@@ -45,7 +47,7 @@ public class Parser {
             case '|' -> attributes(input, offset);
             case '~' -> set(input, offset);
             case '>' -> push(input, offset);
-            default -> throw new IllegalArgumentException("Invalid RESP format " + requestType);
+            default -> throw new IllegalArgumentException("Invalid RESP format " + (char) requestType);
         };
     }
 

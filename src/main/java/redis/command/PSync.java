@@ -4,6 +4,7 @@ import redis.RedisSocket;
 import redis.config.RedisConfig;
 import redis.replication.ReplicationService;
 import redis.resp.RespBulkString;
+import redis.resp.RespSimpleString;
 
 import static redis.util.Logger.debug;
 
@@ -18,7 +19,7 @@ public final class PSync extends AbstractRedisCommand {
     @Override
     public void handle(RedisSocket client) {
         debug("Received PSYNC command");
-        RespBulkString response = new RespBulkString("FULLRESYNC %s 0".formatted(config.getReplicationId()));
+        RespSimpleString response = new RespSimpleString("FULLRESYNC %s 0".formatted(config.getReplicationId()));
         sendResponse(client, response);
 
         byte[] rdbContent = {'$', '8', '8', '\r', '\n', 0x52, 0x45, 0x44, 0x49, 0x53, 0x30, 0x30, 0x31, 0x31, (byte) 0xfa, 0x09, 0x72, 0x65,

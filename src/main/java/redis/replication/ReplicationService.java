@@ -2,6 +2,7 @@ package redis.replication;
 
 import redis.RedisCommandBuilder;
 import redis.RedisSocket;
+import redis.cache.CachedValue;
 import redis.command.RedisCommand;
 import redis.command.Set;
 import redis.config.Constants;
@@ -13,12 +14,15 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.*;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static redis.config.Constants.PONG;
@@ -33,14 +37,17 @@ public class ReplicationService implements AutoCloseable {
     private final Parser parser;
     private final RedisCommandBuilder commandBuilder;
     private volatile boolean fullSyncCompleted;
+    private final String fullResyncMessage;
 
-    public ReplicationService(ExecutorService propagationExecutor, long initialOffset, RedisConfig config) {
+
+    public ReplicationService(ExecutorService propagationExecutor, long initialOffset, RedisConfig config, ConcurrentMap<RespValue, CachedValue<RespValue>> cache) {
         this.config = config;
         this.replicationConnections = new CopyOnWriteArrayList<>();
         this.propagationExecutor = propagationExecutor;
         this.offset = new AtomicLong(initialOffset);
         this.parser = new Parser();
-        this.commandBuilder = new RedisCommandBuilder(config, new ConcurrentHashMap<>(), this);
+        this.commandBuilder = new RedisCommandBuilder(config, cache, this);
+        this.fullResyncMessage = "+FULLRESYNC " + config.getReplicationId() + " 0\r\n";
     }
 
     public void addReplica(RedisSocket clientSocket) {
@@ -85,21 +92,20 @@ public class ReplicationService implements AutoCloseable {
 
     public void establish() throws IOException {
         InetSocketAddress inetSocketAddress = new InetSocketAddress(config.getMasterHost(), config.getMasterPort());
-        RedisSocket socket = new RedisSocket(SocketChannel.open(inetSocketAddress));
+        SocketChannel socketChannel = SocketChannel.open(inetSocketAddress);
+        socketChannel.configureBlocking(true);
+        RedisSocket socket = new RedisSocket(socketChannel);
         try {
             while (!fullSyncCompleted) {
-                ping(socket);
-                replConf(socket);
-                psync(socket);
-                byte[] input = socket.read(256).get();
-                RespValue first = parser.parse(input).getFirst();
-                if (first instanceof RespArray presumablyFullResync
-                    && presumablyFullResync.values().getFirst() instanceof RespBulkString commandToken
-                    && commandToken.value().equalsIgnoreCase("FULLRESYNC")) {
-                    debug("Received presumably full resync command from master: %s", presumablyFullResync);
-                    List<RedisCommand> commands = handleFullsync(socket, input);
-                    commands.forEach(propagatedCommand -> propagatedCommand.handle(socket));
-                    fullSyncCompleted = true;
+                if (handshake(socket)) {
+                    byte[] rdbSizeHeader = socket.readUntil((byte) '\n');
+                    int rdbSize = Integer.parseInt(new String(Arrays.copyOfRange(rdbSizeHeader, 1, rdbSizeHeader.length - 2)));
+                    debug("Got rdb file of size: %s", rdbSize);
+                    Optional<byte[]> read = socket.read(rdbSize);
+                    if (read.isPresent()) {
+                        createDumpFile(read.get());
+                        fullSyncCompleted = true;
+                    }
                 }
             }
         } catch (Exception e) {
@@ -110,9 +116,11 @@ public class ReplicationService implements AutoCloseable {
             while (socket.isConnected()) {
                 try {
                     debug("Waiting for commands from master at %s:%d", config.getMasterHost(), config.getMasterPort());
-                    List<RespValue> readValues = parser.parse(socket.read(256).get());
-                    List<RedisCommand> commands = commandBuilder.build(readValues);
-                    commands.forEach(command -> command.handle(socket));
+                    socket.read(256).ifPresent(read -> {
+                        List<RespValue> respValues = parser.parse(read);
+                        List<RedisCommand> commands = commandBuilder.build(respValues);
+                        commands.forEach(command -> command.handle(socket));
+                    });
                 } catch (Exception e) {
                     error("Error serving client: %s%n", e.getMessage());
                     throw new RedisException(e);
@@ -121,119 +129,54 @@ public class ReplicationService implements AutoCloseable {
         });
     }
 
-    private void ping(RedisSocket socket) {
+    private boolean handshake(RedisSocket socket) {
         write(socket, new RespArray(List.of(new RespBulkString(Constants.PING))));
         debug("Sent PING command to master at %s:%d", config.getMasterHost(), config.getMasterPort());
-
-        RespValue parsedRespValue = parser.parse(socket.read(256).get()).getFirst();
-        if (!(parsedRespValue instanceof RespSimpleString respSimpleString) || !respSimpleString.value().equalsIgnoreCase(PONG)) {
-            throw new RedisException("failed to ping master " + parsedRespValue);
+        byte[] buffer = socket.read(256).orElse(null);
+        if (buffer == null || !(parser.parse(buffer).getFirst() instanceof RespSimpleString respSimpleString) || !respSimpleString.value().equalsIgnoreCase(PONG)) {
+            return false;
         }
-
         debug("Received PONG successfully");
-    }
 
-    private void replConf(RedisSocket socket) throws IOException {
         write(socket, new RespArray(List.of(new RespBulkString("REPLCONF"), new RespBulkString("listening-port"), new RespBulkString(Integer.toString(config.getPort())))));
         debug("Sent REPLCONF command to master at %s:%d", config.getMasterHost(), config.getMasterPort());
-
-        RespValue parsedRespValue = parser.parse(socket.read(256).get()).getFirst();
-        if (parsedRespValue instanceof RespSimpleString respSimpleString && respSimpleString.value().equals("OK")) {
-            debug("Replication configuration first stage set successfully with master at %s:%d", config.getMasterHost(), config.getMasterPort());
-        } else {
+        buffer = socket.read(256).orElse(null);
+        if (buffer == null || !(parser.parse(buffer).getFirst() instanceof RespSimpleString respBulkString) || !respBulkString.value().equals("OK")) {
             error("Failed to set replication configuration with master at %s:%d", config.getMasterHost(), config.getMasterPort());
-            throw new RedisException("Failed to set replication configuration with master");
+            return false;
+        } else {
+            debug("Replication configuration first stage set successfully with master at %s:%d", config.getMasterHost(), config.getMasterPort());
         }
 
         write(socket, new RespArray(List.of(new RespBulkString("REPLCONF"), new RespBulkString("capa"), new RespBulkString("psync2"))));
 
-        parsedRespValue = parser.parse(socket.read(256).get()).getFirst();
-        if (parsedRespValue instanceof RespSimpleString replConfSecondResult && replConfSecondResult.value().equals("OK")) {
-            debug("Replication configuration set successfully with master at %s:%d", config.getMasterHost(), config.getMasterPort());
-        } else {
+        buffer = socket.read(256).orElse(null);
+        if (buffer == null || !(parser.parse(buffer).getFirst() instanceof RespSimpleString replConfSecondResult) || !replConfSecondResult.value().equals("OK")) {
             error("Failed to set replication configuration with master at %s:%d", config.getMasterHost(), config.getMasterPort());
-            throw new RedisException("Failed to set replication configuration with master");
+            return false;
+        } else {
+            debug("Replication configuration set successfully with master at %s:%d", config.getMasterHost(), config.getMasterPort());
         }
-    }
 
-    private void psync(RedisSocket socket) {
         write(socket, new RespArray(List.of(new RespBulkString("PSYNC"), new RespBulkString("?"), new RespBulkString("-1"))));
         debug("Sent PSYNC command to master at %s:%d", config.getMasterHost(), config.getMasterPort());
+
+        buffer = socket.read((fullResyncMessage.getBytes(StandardCharsets.UTF_8).length)).orElse(null);
+        if (buffer == null) {
+            return false;
+        }
+        debug("Received bytes: %s", new String(buffer));
+        return true;
     }
 
-    private List<RedisCommand> handleFullsync(RedisSocket socket, byte[] bytes) throws IOException {
-        debug("Full resync initiated with master");
-        int index = 0;
-        while (bytes[index] != '\r') {
-            index++;
-        }
-        index += 2;
-
-        if (bytes[index] == '$') {
-            debug("got rdb along with the fullresync command");
-            index++;
-            int length = 0;
-            while (bytes[index] != '\r') {
-                length = length * 10 + bytes[index] - '0';
-                index++;
-            }
-
-            createDumpFile(bytes, index + 2, length);
-
-            List<RespValue> replicationMessages = handlePropagatedMessages(bytes, index + 2 + length);
-            if (!replicationMessages.isEmpty()) {
-                return commandBuilder.build(replicationMessages);
-            }
-        }
-
-        bytes = socket.read(256).get();
-        index = 0;
-        if (bytes[index] == '$') {
-            debug("got rdb with the next read");
-            index++;
-            int length = 0;
-            while (bytes[index] != '\r') {
-                length = length * 10 + bytes[index] - '0';
-                index++;
-            }
-
-            createDumpFile(bytes, index + 2, length);
-
-            List<RespValue> replicationMessages = handlePropagatedMessages(bytes, index + 2 + length);
-            if (!replicationMessages.isEmpty()) {
-                return commandBuilder.build(replicationMessages);
-            }
-            bytes = socket.read(256).get();
-            index = 0;
-        }
-
-        List<RespValue> readValues = handlePropagatedMessages(bytes, index);
-        if (!readValues.isEmpty()) {
-            return commandBuilder.build(readValues);
-        }
-
-        return Collections.emptyList();
-    }
-
-    private void createDumpFile(byte[] buffer, int from, int length) throws IOException {
+    private void createDumpFile(byte[] buffer) throws IOException {
         File file = new File("%s/%s".formatted(config.getDir(), config.getDbFileName()));
         File parentFile = file.getParentFile();
         parentFile.mkdirs();
         try (FileOutputStream fileOutputStream = new FileOutputStream(file)) {
-            fileOutputStream.write(buffer, from, length);
+            fileOutputStream.write(buffer);
         }
-        debug("created a dump file %s: %s", file, new String(Arrays.copyOfRange(buffer, from, from + length)));
-    }
-
-    private List<RespValue> handlePropagatedMessages(byte[] buffer, int index) {
-        try {
-            debug("copying propagated messages from index %d %s", index, new String(Arrays.copyOfRange(buffer, index, index + 5)));
-            return parser.parse(Arrays.copyOfRange(buffer, index, buffer.length));
-        } catch (Exception e) {
-            error("skipping invalid data %s", e.getMessage());
-//            throw new RedisException("Failed to parse propagated messages from master: " + e.getMessage());
-            return Collections.emptyList();
-        }
+        debug("created a dump file %s: %s", file, new String(buffer));
     }
 
     @Override
@@ -255,16 +198,5 @@ public class ReplicationService implements AutoCloseable {
 
     private void write(RedisSocket socket, RespArray respArray) {
         socket.write(respArray.serialize());
-    }
-
-    private List<RespValue> read(SocketChannel socket, ByteBuffer buffer) throws IOException {
-        buffer.clear();
-        socket.read(buffer);
-        try {
-            return parser.parse(buffer.array());
-        } catch (Exception e) {
-            error("Failed to parse response from master: %s %n", e.getMessage());
-            throw new RedisException("Failed to parse response from master" + e);
-        }
     }
 }

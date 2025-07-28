@@ -13,11 +13,6 @@ public class RedisSocket implements AutoCloseable {
 
     public RedisSocket(SocketChannel socketChannel) {
         this.socketChannel = socketChannel;
-        try {
-            socketChannel.configureBlocking(false);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
     }
 
     public boolean isConnected() {
@@ -53,6 +48,22 @@ public class RedisSocket implements AutoCloseable {
         }
         return bytesRead;
     }
+
+    public byte[] readUntil(byte value) {
+        var buffer = ByteBuffer.allocate(256);
+        for (int i = 0; i < buffer.limit(); ++i) {
+            var b = read(1);
+            b.ifPresent(buffer::put);
+            if (b.isPresent() && b.get()[0] == value) {
+                break;
+            }
+        }
+        var buf = new byte[buffer.position()];
+        buffer.flip();
+        buffer.get(buf);
+        return buf;
+    }
+
 
     public void write(byte[] message) {
         try {
