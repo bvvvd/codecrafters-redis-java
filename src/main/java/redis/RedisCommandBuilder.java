@@ -49,7 +49,7 @@ public class RedisCommandBuilder {
                 case INFO_COMMAND_PREFIX_CONTENT -> new Info(config);
                 case REPLCONF_COMMAND_PREFIX_CONTENT -> new ReplConf(tokens, array.serialize().length, config, replicationService);
                 case PSYNC_COMMAND_PREFIX_CONTENT -> new PSync(config, replicationService);
-                case WAIT_COMMAND_PREFIX_CONTENT -> new Wait(tokens, config);
+                case WAIT_COMMAND_PREFIX_CONTENT -> new Wait(tokens, config, replicationService);
                 default -> throw new RedisException("unsupported command: " + respBulkString.value());
             };
         }

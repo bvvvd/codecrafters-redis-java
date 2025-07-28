@@ -3,21 +3,22 @@ package redis.command;
 import redis.RedisSocket;
 import redis.config.RedisConfig;
 import redis.exception.RedisException;
+import redis.replication.ReplicationService;
 import redis.resp.RespBulkString;
 import redis.resp.RespInteger;
 import redis.resp.RespValue;
 
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.CountDownLatch;
 
 import static redis.util.Logger.debug;
 
 public final class Wait extends AbstractRedisCommand {
     private final int numberOfReplicas;
     private final int timeout;
+    private final ReplicationService replicationService;
 
-    public Wait(List<RespValue> tokens, RedisConfig config) {
+    public Wait(List<RespValue> tokens, RedisConfig config, ReplicationService replicationService) {
         super(config);
         if (tokens.size() < 3 || !(tokens.get(1) instanceof RespBulkString numberOfReplicasResp)
             || !(tokens.get(2) instanceof RespBulkString timeoutResp)) {
@@ -26,6 +27,7 @@ public final class Wait extends AbstractRedisCommand {
 
         this.numberOfReplicas = Integer.parseInt(numberOfReplicasResp.value());
         this.timeout = Integer.parseInt(timeoutResp.value());
+        this.replicationService = replicationService;
     }
 
     @Override
@@ -52,7 +54,7 @@ public final class Wait extends AbstractRedisCommand {
 //            var replicasReplied = numReplicas - waitLatch.getCount();
 //            debug("WAIT command completed, %d replicas replied", replicasReplied);
 //            response = new RespInteger(replicasReplied);
-        sendResponse(client, new RespInteger(0));
+        sendResponse(client, new RespInteger(replicationService.getReplicaNumber()));
     }
 
     public int numberOfReplicas() {
