@@ -48,7 +48,6 @@ public class Redis implements AutoCloseable {
             while (!Thread.currentThread().isInterrupted()) {
                 debug("Redis %s is running on port %d", config.getRole(), config.getPort());
                 RedisSocket client = new RedisSocket(serverChannel.accept());
-//                client.configureBlocking(false);
                 clientListeners.submit(() -> {
                     while (client.isConnected()) {
                         try {

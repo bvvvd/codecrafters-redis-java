@@ -26,9 +26,7 @@ public class DumpFileReader implements PersistentFileReader {
         String filePath = "%s/%s".formatted(config.getDir(), config.getDbFileName());
         try {
             BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(filePath));
-            BufferedInputStream inputStream1 = new BufferedInputStream(new FileInputStream(filePath));
             debug("reading a file: %s", filePath);
-            debug("reading a file: %s", new String(inputStream1.readAllBytes()));
             return readInternally(inputStream);
         } catch (IOException e) {
             error("Failed to read dump file '%s': %s%n", filePath, e.getMessage());

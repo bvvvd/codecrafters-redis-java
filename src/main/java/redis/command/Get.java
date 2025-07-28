@@ -25,10 +25,10 @@ public final class Get extends AbstractRedisCommand {
                ConcurrentMap<RespValue, CachedValue<RespValue>> cache,
                RedisConfig config) {
         super(config);
-        if (tokens.size() < 2 || !(tokens.get(1) instanceof RespBulkString key)) {
+        if (tokens.size() < 2 || !(tokens.get(1) instanceof RespBulkString keyResp)) {
             throw new RedisException("GET command requires a valid key argument");
         }
-        this.key = key;
+        this.key = keyResp;
         this.cache = cache;
         this.dumpFileReader = new DumpFileReader(config);
     }

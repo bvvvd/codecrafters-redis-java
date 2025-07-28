@@ -3,7 +3,6 @@ package redis.command;
 import redis.RedisSocket;
 import redis.config.RedisConfig;
 import redis.replication.ReplicationService;
-import redis.resp.RespBulkString;
 import redis.resp.RespSimpleString;
 
 import static redis.util.Logger.debug;
