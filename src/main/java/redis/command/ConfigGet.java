@@ -1,12 +1,12 @@
 package redis.command;
 
+import redis.RedisSocket;
 import redis.config.RedisConfig;
 import redis.exception.RedisException;
 import redis.resp.RespArray;
 import redis.resp.RespBulkString;
 import redis.resp.RespValue;
 
-import java.net.Socket;
 import java.util.List;
 import java.util.Objects;
 
@@ -23,17 +23,17 @@ public final class ConfigGet extends AbstractRedisCommand {
             throw new RedisException("CONFIG command requires a valid subcommand");
 
         }
-        if (tokens.size() == 2 || !(tokens.get(2) instanceof RespBulkString pattern)
-            || pattern.value().isBlank()
-            || !(pattern.value().equalsIgnoreCase("dbfilename") || pattern.value().equalsIgnoreCase("dir"))) {
+        if (tokens.size() == 2 || !(tokens.get(2) instanceof RespBulkString patternResp)
+            || patternResp.value().isBlank()
+            || !(patternResp.value().equalsIgnoreCase("dbfilename") || patternResp.value().equalsIgnoreCase("dir"))) {
             throw new RedisException("CONFIG GET command requires a valid pattern argument");
         }
 
-        this.pattern = pattern.value();
+        this.pattern = patternResp.value();
     }
 
     @Override
-    public void handle(Socket client) {
+    public void handle(RedisSocket client) {
         RespArray response = new RespArray(List.of(
                 new RespBulkString(pattern),
                 new RespBulkString(pattern.equalsIgnoreCase("dir")

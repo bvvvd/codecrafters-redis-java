@@ -1,5 +1,6 @@
 package redis.command;
 
+import redis.RedisSocket;
 import redis.config.RedisConfig;
 import redis.exception.RedisException;
 import redis.persistence.DumpFileReader;
@@ -7,7 +8,6 @@ import redis.resp.RespArray;
 import redis.resp.RespBulkString;
 import redis.resp.RespValue;
 
-import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -42,7 +42,7 @@ public final class Keys extends AbstractRedisCommand {
     }
 
     @Override
-    public void handle(Socket client) {
+    public void handle(RedisSocket client) {
         debug("Received KEYS command");
         List<RespValue> values = new ArrayList<>();
         dumpFileReader.read().keys().forEach(

@@ -1,12 +1,12 @@
 package redis.command;
 
+import redis.RedisSocket;
 import redis.config.RedisConfig;
 import redis.exception.RedisException;
 import redis.resp.RespBulkString;
 import redis.resp.RespInteger;
 import redis.resp.RespValue;
 
-import java.net.Socket;
 import java.util.List;
 import java.util.Objects;
 
@@ -26,7 +26,7 @@ public final class Wait extends AbstractRedisCommand {
     }
 
     @Override
-    public void handle(Socket client) {
+    public void handle(RedisSocket client) {
 //        debug("Received WAIT command with numslaves: %d and timeout: %d and lastCommand: %s", numberOfReplicas, numberOfReplicas, lastCommand);
         RespInteger response = null;
 //        if (lastCommand instanceof Set) {

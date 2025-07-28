@@ -1,9 +1,8 @@
 package redis.command;
 
+import redis.RedisSocket;
 import redis.config.RedisConfig;
 import redis.resp.RespBulkString;
-
-import java.net.Socket;
 
 import static redis.util.Logger.debug;
 
@@ -28,7 +27,7 @@ public final class Info extends AbstractRedisCommand {
     }
 
     @Override
-    public void handle(Socket client) {
+    public void handle(RedisSocket client) {
         debug("Received INFO command");
         RespBulkString response = config.getRole().equalsIgnoreCase("master")
                 ? new RespBulkString("role:%s\r\nmaster_repl_offset:0\r\nmaster_replid:%s".formatted(config.getRole(), config.getReplicationId()))

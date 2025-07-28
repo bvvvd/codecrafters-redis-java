@@ -1,5 +1,6 @@
 package redis.command;
 
+import redis.RedisSocket;
 import redis.config.RedisConfig;
 import redis.exception.RedisException;
 import redis.replication.ReplicationService;
@@ -7,7 +8,6 @@ import redis.resp.RespArray;
 import redis.resp.RespBulkString;
 import redis.resp.RespValue;
 
-import java.net.Socket;
 import java.util.List;
 import java.util.Objects;
 
@@ -46,7 +46,7 @@ public final class ReplConf extends AbstractRedisCommand {
     }
 
     @Override
-    public void handle(Socket client) {
+    public void handle(RedisSocket client) {
         if (config.getRole().equalsIgnoreCase("master")) {
             debug("Received REPLCONF command as master: %s", this);
         } else {

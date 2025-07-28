@@ -1,9 +1,9 @@
 package redis.command;
 
 
-import java.net.Socket;
+import redis.RedisSocket;
 
 public sealed interface RedisCommand permits AbstractRedisCommand {
 
-    void handle(Socket client);
+    void handle(RedisSocket client);
 }

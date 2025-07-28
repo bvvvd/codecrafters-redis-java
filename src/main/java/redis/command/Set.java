@@ -1,5 +1,6 @@
 package redis.command;
 
+import redis.RedisSocket;
 import redis.cache.CachedValue;
 import redis.config.RedisConfig;
 import redis.exception.RedisException;
@@ -7,7 +8,6 @@ import redis.replication.ReplicationService;
 import redis.resp.RespBulkString;
 import redis.resp.RespValue;
 
-import java.net.Socket;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -67,7 +67,7 @@ public final class Set extends AbstractRedisCommand {
     }
 
     @Override
-    public void handle(Socket client) {
+    public void handle(RedisSocket client) {
         boolean isMaster = config.getRole().equalsIgnoreCase("master");
         if (isMaster) {
             debug("SET command received, caching %s", this);

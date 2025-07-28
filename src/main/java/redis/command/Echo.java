@@ -1,12 +1,12 @@
 package redis.command;
 
 
+import redis.RedisSocket;
 import redis.config.RedisConfig;
 import redis.exception.RedisException;
 import redis.resp.RespBulkString;
 import redis.resp.RespValue;
 
-import java.net.Socket;
 import java.util.List;
 import java.util.Objects;
 
@@ -28,7 +28,7 @@ public final class Echo extends AbstractRedisCommand {
     }
 
     @Override
-    public void handle(Socket client) {
+    public void handle(RedisSocket client) {
         debug("Sending echo response: %s", value);
         sendResponse(client, value);
     }

@@ -1,5 +1,6 @@
 package redis.command;
 
+import redis.RedisSocket;
 import redis.cache.CachedValue;
 import redis.config.RedisConfig;
 import redis.exception.RedisException;
@@ -9,7 +10,6 @@ import redis.persistence.PersistentFileReader;
 import redis.resp.RespBulkString;
 import redis.resp.RespValue;
 
-import java.net.Socket;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentMap;
@@ -38,7 +38,7 @@ public final class Get extends AbstractRedisCommand {
     }
 
     @Override
-    public void handle(Socket client) {
+    public void handle(RedisSocket client) {
         debug("cache content: %s", cache);
         CachedValue<RespValue> cachedValue = cache.get(key);
         if (cachedValue == null || !cachedValue.isValid()) {

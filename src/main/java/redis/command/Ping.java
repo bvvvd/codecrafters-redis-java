@@ -1,9 +1,8 @@
 package redis.command;
 
+import redis.RedisSocket;
 import redis.config.RedisConfig;
 import redis.resp.RespSimpleString;
-
-import java.net.Socket;
 
 import static redis.config.Constants.PONG;
 import static redis.util.Logger.debug;
@@ -30,7 +29,7 @@ public final class Ping extends AbstractRedisCommand {
 
 
     @Override
-    public void handle(Socket client) {
+    public void handle(RedisSocket client) {
         debug("Received PING command, sending PONG response.");
         if (config.getRole().equalsIgnoreCase("master")) {
             sendResponse(client, new RespSimpleString(PONG));

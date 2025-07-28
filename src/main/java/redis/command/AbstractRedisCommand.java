@@ -1,13 +1,10 @@
 package redis.command;
 
+import redis.RedisSocket;
 import redis.config.RedisConfig;
 import redis.resp.RespValue;
 
-import java.io.IOException;
-import java.net.Socket;
-
 import static redis.util.Logger.debug;
-import static redis.util.Logger.error;
 
 public abstract sealed class AbstractRedisCommand implements RedisCommand permits ConfigGet, Echo, Get, Info, Keys, PSync, Ping, ReplConf, Set, Wait {
     protected final RedisConfig config;
@@ -16,19 +13,14 @@ public abstract sealed class AbstractRedisCommand implements RedisCommand permit
         this.config = config;
     }
 
-    protected void sendResponse(Socket client, RespValue response) {
+    protected void sendResponse(RedisSocket client, RespValue response) {
         if (response != null) {
-            try {
-                byte[] serializedResponse = response.serialize();
-                sendResponse(client, serializedResponse);
-            } catch (IOException e) {
-                error("Failed to send response: %s%n", e.getMessage());
-            }
+            sendResponse(client, response.serialize());
         }
     }
 
-    protected void sendResponse(Socket client, byte[] serializedResponse) throws IOException {
+    protected void sendResponse(RedisSocket client, byte[] serializedResponse) {
         debug("Sending response: %s", new String(serializedResponse));
-        client.getOutputStream().write(serializedResponse);
+        client.write(serializedResponse);
     }
 }
