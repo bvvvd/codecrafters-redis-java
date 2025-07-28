@@ -30,7 +30,7 @@ public final class Wait extends AbstractRedisCommand {
 
     @Override
     public void handle(RedisSocket client) {
-        debug("Received WAIT command with numslaves: %d and timeout: %d and lastCommand: %s", numberOfReplicas, numberOfReplicas, lastCommand);
+        debug("Received WAIT command with numslaves: %d and timeout: %d", numberOfReplicas, numberOfReplicas);
         RespInteger response = null;
 //        if (lastCommand instanceof Set) {
 //            debug("provalilsya taki ovde: %s, %s", lastCommand, wait);
@@ -52,7 +52,7 @@ public final class Wait extends AbstractRedisCommand {
 //            var replicasReplied = numReplicas - waitLatch.getCount();
 //            debug("WAIT command completed, %d replicas replied", replicasReplied);
 //            response = new RespInteger(replicasReplied);
-        sendResponse(client, new RespBulkString("0"));
+        sendResponse(client, new RespInteger(0));
     }
 
     public int numberOfReplicas() {
