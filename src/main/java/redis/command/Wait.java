@@ -9,6 +9,9 @@ import redis.resp.RespValue;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CountDownLatch;
+
+import static redis.util.Logger.debug;
 
 public final class Wait extends AbstractRedisCommand {
     private final int numberOfReplicas;
@@ -27,7 +30,7 @@ public final class Wait extends AbstractRedisCommand {
 
     @Override
     public void handle(RedisSocket client) {
-//        debug("Received WAIT command with numslaves: %d and timeout: %d and lastCommand: %s", numberOfReplicas, numberOfReplicas, lastCommand);
+        debug("Received WAIT command with numslaves: %d and timeout: %d and lastCommand: %s", numberOfReplicas, numberOfReplicas, lastCommand);
         RespInteger response = null;
 //        if (lastCommand instanceof Set) {
 //            debug("provalilsya taki ovde: %s, %s", lastCommand, wait);
@@ -49,8 +52,7 @@ public final class Wait extends AbstractRedisCommand {
 //            var replicasReplied = numReplicas - waitLatch.getCount();
 //            debug("WAIT command completed, %d replicas replied", replicasReplied);
 //            response = new RespInteger(replicasReplied);
-//        }
-//        sendResponse(clientSocket, response);
+        sendResponse(client, new RespBulkString("0"));
     }
 
     public int numberOfReplicas() {
