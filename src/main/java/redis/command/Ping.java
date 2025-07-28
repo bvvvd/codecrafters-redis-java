@@ -2,14 +2,18 @@ package redis.command;
 
 import redis.RedisSocket;
 import redis.config.RedisConfig;
+import redis.replication.ReplicationService;
 import redis.resp.RespSimpleString;
 
 import static redis.config.Constants.PONG;
 import static redis.util.Logger.debug;
 
 public final class Ping extends AbstractRedisCommand {
-    public Ping(RedisConfig config) {
+    private final ReplicationService replicationService;
+
+    public Ping(RedisConfig config, ReplicationService replicationService) {
         super(config);
+        this.replicationService = replicationService;
     }
 
     @Override
@@ -27,12 +31,12 @@ public final class Ping extends AbstractRedisCommand {
         return "Ping[]";
     }
 
-
     @Override
     public void handle(RedisSocket client) {
         debug("Received PING command, sending PONG response.");
         if (config.getRole().equalsIgnoreCase("master")) {
             sendResponse(client, new RespSimpleString(PONG));
         }
+        replicationService.moveOffset(14);
     }
 }

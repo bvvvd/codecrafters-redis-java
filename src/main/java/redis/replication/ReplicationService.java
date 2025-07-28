@@ -100,7 +100,6 @@ public class ReplicationService implements AutoCloseable {
                 if (handshake(socket)) {
                     byte[] rdbSizeHeader = socket.readUntil((byte) '\n');
                     int rdbSize = Integer.parseInt(new String(Arrays.copyOfRange(rdbSizeHeader, 1, rdbSizeHeader.length - 2)));
-                    debug("Got rdb file of size: %s", rdbSize);
                     Optional<byte[]> read = socket.read(rdbSize);
                     if (read.isPresent()) {
                         createDumpFile(read.get());
@@ -131,21 +130,16 @@ public class ReplicationService implements AutoCloseable {
 
     private boolean handshake(RedisSocket socket) {
         write(socket, new RespArray(List.of(new RespBulkString(Constants.PING))));
-        debug("Sent PING command to master at %s:%d", config.getMasterHost(), config.getMasterPort());
         byte[] buffer = socket.read(256).orElse(null);
         if (buffer == null || !(parser.parse(buffer).getFirst() instanceof RespSimpleString respSimpleString) || !respSimpleString.value().equalsIgnoreCase(PONG)) {
             return false;
         }
-        debug("Received PONG successfully");
 
         write(socket, new RespArray(List.of(new RespBulkString("REPLCONF"), new RespBulkString("listening-port"), new RespBulkString(Integer.toString(config.getPort())))));
-        debug("Sent REPLCONF command to master at %s:%d", config.getMasterHost(), config.getMasterPort());
         buffer = socket.read(256).orElse(null);
         if (buffer == null || !(parser.parse(buffer).getFirst() instanceof RespSimpleString respBulkString) || !respBulkString.value().equals("OK")) {
             error("Failed to set replication configuration with master at %s:%d", config.getMasterHost(), config.getMasterPort());
             return false;
-        } else {
-            debug("Replication configuration first stage set successfully with master at %s:%d", config.getMasterHost(), config.getMasterPort());
         }
 
         write(socket, new RespArray(List.of(new RespBulkString("REPLCONF"), new RespBulkString("capa"), new RespBulkString("psync2"))));
@@ -154,19 +148,12 @@ public class ReplicationService implements AutoCloseable {
         if (buffer == null || !(parser.parse(buffer).getFirst() instanceof RespSimpleString replConfSecondResult) || !replConfSecondResult.value().equals("OK")) {
             error("Failed to set replication configuration with master at %s:%d", config.getMasterHost(), config.getMasterPort());
             return false;
-        } else {
-            debug("Replication configuration set successfully with master at %s:%d", config.getMasterHost(), config.getMasterPort());
         }
 
         write(socket, new RespArray(List.of(new RespBulkString("PSYNC"), new RespBulkString("?"), new RespBulkString("-1"))));
-        debug("Sent PSYNC command to master at %s:%d", config.getMasterHost(), config.getMasterPort());
 
         buffer = socket.read((fullResyncMessage.getBytes(StandardCharsets.UTF_8).length)).orElse(null);
-        if (buffer == null) {
-            return false;
-        }
-        debug("Received bytes: %s", new String(buffer));
-        return true;
+        return buffer != null;
     }
 
     private void createDumpFile(byte[] buffer) throws IOException {
@@ -189,6 +176,7 @@ public class ReplicationService implements AutoCloseable {
     }
 
     public void moveOffset(int length) {
+        debug("Moving offset by: %d", length);
         offset.addAndGet(length);
     }
 

@@ -18,8 +18,9 @@ public final class ReplConf extends AbstractRedisCommand {
     private final Mode mode;
     private final String value;
     private final ReplicationService replicationService;
+    private final int length;
 
-    public ReplConf(List<RespValue> tokens, RedisConfig config, ReplicationService replicationService) {
+    public ReplConf(List<RespValue> tokens, int length, RedisConfig config, ReplicationService replicationService) {
         super(config);
 
         if (tokens.size() < 2 || !(tokens.get(1) instanceof RespBulkString replConfMode)) {
@@ -27,6 +28,7 @@ public final class ReplConf extends AbstractRedisCommand {
         }
         this.mode = getMode(tokens, replConfMode);
         this.value = tokens.size() > 2 ? ((RespBulkString) tokens.get(2)).value() : null;
+        this.length = length;
         this.replicationService = replicationService;
     }
 
@@ -78,6 +80,7 @@ public final class ReplConf extends AbstractRedisCommand {
             case GET_ACK ->
                     new RespArray(List.of(new RespBulkString("REPLCONF"), new RespBulkString("ACK"), new RespBulkString(Long.toString(replicationService.getOffset()))));
         };
+        replicationService.moveOffset(length);
         if (response != null) {
             sendResponse(client, response);
         }
