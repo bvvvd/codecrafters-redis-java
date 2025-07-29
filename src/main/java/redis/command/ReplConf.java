@@ -17,11 +17,10 @@ import static redis.util.Logger.debug;
 public final class ReplConf extends AbstractRedisCommand {
     private final Mode mode;
     private final String value;
-    private final ReplicationService replicationService;
     private final int length;
 
     public ReplConf(List<RespValue> tokens, int length, RedisConfig config, ReplicationService replicationService) {
-        super(config);
+        super(config, replicationService);
 
         if (tokens.size() < 2 || !(tokens.get(1) instanceof RespBulkString replConfMode)) {
             throw new RedisException("REPLCONF command requires a valid mode argument: " + tokens);
@@ -29,7 +28,6 @@ public final class ReplConf extends AbstractRedisCommand {
         this.mode = getMode(tokens, replConfMode);
         this.value = tokens.size() > 2 ? ((RespBulkString) tokens.get(2)).value() : null;
         this.length = length;
-        this.replicationService = replicationService;
     }
 
     private Mode getMode(List<RespValue> tokens, RespBulkString mode) {
@@ -49,7 +47,7 @@ public final class ReplConf extends AbstractRedisCommand {
     }
 
     @Override
-    public void handle(RedisSocket client) {
+    public void handleCommand(RedisSocket client) {
         if (config.getRole().equalsIgnoreCase("master")) {
             debug("Received REPLCONF command as master: %s", this);
         } else {
@@ -71,16 +69,18 @@ public final class ReplConf extends AbstractRedisCommand {
                 debug("current replication offset: %d, delta: %d", replicationService.getOffset(), respArray.serialize().length);
                 var actualOffset = Integer.parseInt(value);
                 debug("expected offset: %d, actual offset: %d", expectedOffset, actualOffset);
-//                if (waitLatch != null && expectedOffset == actualOffset) {
-//                    waitLatch.countDown();
-//                }
+                if (replicationService.getWaitLatch() != null && expectedOffset == actualOffset) {
+                    replicationService.getWaitLatch().countDown();
+                }
                 yield null;
             }
             case CAPA, LISTENING_PORT -> new RespSimpleString("OK");
             case GET_ACK ->
                     new RespArray(List.of(new RespBulkString("REPLCONF"), new RespBulkString("ACK"), new RespBulkString(Long.toString(replicationService.getOffset()))));
         };
-        replicationService.moveOffset(length);
+        if (config.getRole().equalsIgnoreCase("slave")) {
+            replicationService.moveOffset(length);
+        }
         if (response != null) {
             sendResponse(client, response);
         }

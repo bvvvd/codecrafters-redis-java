@@ -23,13 +23,11 @@ public final class Set extends AbstractRedisCommand {
     private final long expirationTime;
     private final byte[] originalBytes;
     private final ConcurrentMap<RespValue, CachedValue<RespValue>> cache;
-    private final ReplicationService replicationService;
 
     public Set(List<RespValue> tokens, byte[] originalBytes,
                RedisConfig config, ConcurrentMap<RespValue, CachedValue<RespValue>> cache, ReplicationService replicationService) {
-        super(config);
+        super(config, replicationService);
         this.cache = cache;
-        this.replicationService = replicationService;
 
         if (tokens.size() >= 3 && (tokens.get(1) instanceof RespBulkString keyResp)
             && (tokens.get(2) instanceof RespBulkString valueResp)) {
@@ -68,7 +66,7 @@ public final class Set extends AbstractRedisCommand {
     }
 
     @Override
-    public void handle(RedisSocket client) {
+    public void handleCommand(RedisSocket client) {
         boolean isMaster = config.getRole().equalsIgnoreCase("master");
         if (isMaster) {
             debug("SET command received, caching %s", this);
@@ -114,21 +112,5 @@ public final class Set extends AbstractRedisCommand {
     @Override
     public int hashCode() {
         return Objects.hash(key, value, expirationTime, Arrays.hashCode(originalBytes));
-    }
-
-    public RespValue key() {
-        return key;
-    }
-
-    public RespValue value() {
-        return value;
-    }
-
-    public long expirationTime() {
-        return expirationTime;
-    }
-
-    public byte[] originalBytes() {
-        return originalBytes;
     }
 }

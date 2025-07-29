@@ -8,15 +8,13 @@ import redis.resp.RespSimpleString;
 import static redis.util.Logger.debug;
 
 public final class PSync extends AbstractRedisCommand {
-    private final ReplicationService replicationService;
 
     public PSync(RedisConfig config, ReplicationService replicationService) {
-        super(config);
-        this.replicationService = replicationService;
+        super(config, replicationService);
     }
 
     @Override
-    public void handle(RedisSocket client) {
+    public void handleCommand(RedisSocket client) {
         debug("Received PSYNC command");
         RespSimpleString response = new RespSimpleString("FULLRESYNC %s 0".formatted(config.getReplicationId()));
         sendResponse(client, response);

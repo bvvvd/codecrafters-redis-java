@@ -4,6 +4,7 @@ package redis.command;
 import redis.RedisSocket;
 import redis.config.RedisConfig;
 import redis.exception.RedisException;
+import redis.replication.ReplicationService;
 import redis.resp.RespBulkString;
 import redis.resp.RespValue;
 
@@ -15,20 +16,16 @@ import static redis.util.Logger.debug;
 public final class Echo extends AbstractRedisCommand {
     private final RespValue value;
 
-    public Echo(List<RespValue> tokens, RedisConfig config) {
-        super(config);
+    public Echo(List<RespValue> tokens, RedisConfig config, ReplicationService replicationService) {
+        super(config, replicationService);
         if (tokens.size() < 2 || !(tokens.get(1) instanceof RespBulkString argument)) {
             throw new RedisException("ECHO command requires a valid message argument");
         }
         this.value = argument;
     }
 
-    public RespValue value() {
-        return value;
-    }
-
     @Override
-    public void handle(RedisSocket client) {
+    public void handleCommand(RedisSocket client) {
         debug("Sending echo response: %s", value);
         sendResponse(client, value);
     }

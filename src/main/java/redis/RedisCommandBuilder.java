@@ -41,12 +41,12 @@ public class RedisCommandBuilder {
         if (commandIdentifier instanceof RespBulkString respBulkString) {
             return switch (respBulkString.value().toUpperCase()) {
                 case PING -> new Ping(config, replicationService);
-                case ECHO_COMMAND_CONTENT -> new Echo(tokens, config);
+                case ECHO_COMMAND_CONTENT -> new Echo(tokens, config, replicationService);
                 case SET_COMMAND_CONTENT -> new Set(tokens, array.serialize(), config, cache, replicationService);
-                case GET_COMMAND_CONTENT -> new Get(tokens, cache, config);
-                case CONFIG_COMMAND_PREFIX_CONTENT -> new ConfigGet(tokens, config);
-                case KEYS_COMMAND_CONTENT -> new Keys(tokens, config);
-                case INFO_COMMAND_PREFIX_CONTENT -> new Info(config);
+                case GET_COMMAND_CONTENT -> new Get(tokens, cache, config, replicationService);
+                case CONFIG_COMMAND_PREFIX_CONTENT -> new ConfigGet(tokens, config, replicationService);
+                case KEYS_COMMAND_CONTENT -> new Keys(tokens, config, replicationService);
+                case INFO_COMMAND_PREFIX_CONTENT -> new Info(config, replicationService);
                 case REPLCONF_COMMAND_PREFIX_CONTENT -> new ReplConf(tokens, array.serialize().length, config, replicationService);
                 case PSYNC_COMMAND_PREFIX_CONTENT -> new PSync(config, replicationService);
                 case WAIT_COMMAND_PREFIX_CONTENT -> new Wait(tokens, config, replicationService);

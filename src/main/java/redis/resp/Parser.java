@@ -12,14 +12,12 @@ public class Parser {
         if (input == null || input.length == 0) {
             throw new IllegalArgumentException("Input cannot be null or empty");
         }
-        debug("Parsing RESP input: %s", new String(input));
 
         AtomicInteger offset = new AtomicInteger();
         List<RespValue> values = new ArrayList<>();
         while (offset.get() < input.length && input[offset.get()] != 0
                && input[offset.get()] != '\n' && input[offset.get()] != '\r') {
             values.add(parse(input, offset));
-//            offset.incrementAndGet();
         }
         debug("Parsed RESP values: %s", values);
         return values;

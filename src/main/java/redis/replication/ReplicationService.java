@@ -38,7 +38,8 @@ public class ReplicationService implements AutoCloseable {
     private final RedisCommandBuilder commandBuilder;
     private volatile boolean fullSyncCompleted;
     private final String fullResyncMessage;
-
+    private volatile RedisCommand lastCommand;
+    private volatile CountDownLatch waitLatch;
 
     public ReplicationService(ExecutorService propagationExecutor, long initialOffset, RedisConfig config, ConcurrentMap<RespValue, CachedValue<RespValue>> cache) {
         this.config = config;
@@ -69,7 +70,7 @@ public class ReplicationService implements AutoCloseable {
         }));
     }
 
-    public void propagate(RespValue respValue, CountDownLatch waitLatch) {
+    public void propagate(RespValue respValue) {
         debug("propagating command to replica: " + respValue);
         byte[] serialize = respValue.serialize();
         debug("moved offset by: " + serialize.length);
@@ -186,5 +187,21 @@ public class ReplicationService implements AutoCloseable {
 
     private void write(RedisSocket socket, RespArray respArray) {
         socket.write(respArray.serialize());
+    }
+
+    public void setLastCommand(RedisCommand redisCommand) {
+        this.lastCommand = redisCommand;
+    }
+
+    public RedisCommand getLastCommand() {
+        return lastCommand;
+    }
+
+    public void setLatch(CountDownLatch latch) {
+        this.waitLatch = latch;
+    }
+
+    public CountDownLatch getWaitLatch() {
+        return waitLatch;
     }
 }

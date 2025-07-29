@@ -42,11 +42,7 @@ public class RedisSocket implements AutoCloseable {
     }
 
     private int read(ByteBuffer buffer) throws IOException {
-        var bytesRead = socketChannel.read(buffer);
-        if (bytesRead > 0) {
-            debug("Bytes read: %s %s", bytesRead, new String(buffer.array()));
-        }
-        return bytesRead;
+        return socketChannel.read(buffer);
     }
 
     public byte[] readUntil(byte value) {

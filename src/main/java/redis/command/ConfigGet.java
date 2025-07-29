@@ -3,6 +3,7 @@ package redis.command;
 import redis.RedisSocket;
 import redis.config.RedisConfig;
 import redis.exception.RedisException;
+import redis.replication.ReplicationService;
 import redis.resp.RespArray;
 import redis.resp.RespBulkString;
 import redis.resp.RespValue;
@@ -16,8 +17,8 @@ import static redis.util.Logger.debug;
 public final class ConfigGet extends AbstractRedisCommand {
     private final String pattern;
 
-    public ConfigGet(List<RespValue> tokens, RedisConfig config) {
-        super(config);
+    public ConfigGet(List<RespValue> tokens, RedisConfig config, ReplicationService replicationService) {
+        super(config, replicationService);
         if (tokens.size() < 2 || !(tokens.get(1) instanceof RespBulkString respBulkString)
             || !respBulkString.value().equalsIgnoreCase(GET_COMMAND_CONTENT)) {
             throw new RedisException("CONFIG command requires a valid subcommand");
@@ -33,7 +34,7 @@ public final class ConfigGet extends AbstractRedisCommand {
     }
 
     @Override
-    public void handle(RedisSocket client) {
+    public void handleCommand(RedisSocket client) {
         RespArray response = new RespArray(List.of(
                 new RespBulkString(pattern),
                 new RespBulkString(pattern.equalsIgnoreCase("dir")
@@ -41,10 +42,6 @@ public final class ConfigGet extends AbstractRedisCommand {
                         : config.getDbFileName())));
         debug("CONFIG GET command received, returning configuration.");
         sendResponse(client, response);
-    }
-
-    public String pattern() {
-        return pattern;
     }
 
     @Override

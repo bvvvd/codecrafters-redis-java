@@ -7,6 +7,7 @@ import redis.exception.RedisException;
 import redis.persistence.DumpFileContent;
 import redis.persistence.DumpFileReader;
 import redis.persistence.PersistentFileReader;
+import redis.replication.ReplicationService;
 import redis.resp.RespBulkString;
 import redis.resp.RespValue;
 
@@ -23,8 +24,8 @@ public final class Get extends AbstractRedisCommand {
 
     public Get(List<RespValue> tokens,
                ConcurrentMap<RespValue, CachedValue<RespValue>> cache,
-               RedisConfig config) {
-        super(config);
+               RedisConfig config, ReplicationService replicationService) {
+        super(config, replicationService);
         if (tokens.size() < 2 || !(tokens.get(1) instanceof RespBulkString keyResp)) {
             throw new RedisException("GET command requires a valid key argument");
         }
@@ -33,12 +34,8 @@ public final class Get extends AbstractRedisCommand {
         this.dumpFileReader = new DumpFileReader(config);
     }
 
-    public RespValue key() {
-        return key;
-    }
-
     @Override
-    public void handle(RedisSocket client) {
+    public void handleCommand(RedisSocket client) {
         debug("cache content: %s", cache);
         CachedValue<RespValue> cachedValue = cache.get(key);
         if (cachedValue == null || !cachedValue.isValid()) {
