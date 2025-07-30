@@ -4,5 +4,5 @@ public sealed interface RespValue permits AbstractRespValue {
 
     byte[] serialize();
 
-    int size();
+    int getSize();
 }

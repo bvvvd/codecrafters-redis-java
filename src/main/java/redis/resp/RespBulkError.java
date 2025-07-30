@@ -57,18 +57,18 @@ public final class RespBulkError extends AbstractRespValue {
         if (obj == null || obj.getClass() != this.getClass()) return false;
         var that = (RespBulkError) obj;
         return Objects.equals(this.value, that.value) &&
-               this.size() == that.size();
+               this.getSize() == that.getSize();
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(value, size());
+        return Objects.hash(value, getSize());
     }
 
     @Override
     public String toString() {
         return "RespBulkError[" +
                "value=" + value + ", " +
-               "size=" + size() + ']';
+               "size=" + getSize() + ']';
     }
 }

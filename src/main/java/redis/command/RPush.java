@@ -15,6 +15,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 public final class RPush extends AbstractRedisCommand {
     public static final String CODE = "RPUSH";
@@ -47,7 +48,7 @@ public final class RPush extends AbstractRedisCommand {
     protected void handleCommand(RedisSocket client) {
         CachedValue<RespValue> cachedValue = cache.get(key);
         if (cachedValue == null || !(cachedValue.getValue() instanceof RespArray array)) {
-            cache.put(key, new CachedValue<>(new RespArray(new ArrayList<>(values)), -1));
+            cache.put(key, new CachedValue<>(new RespArray(new CopyOnWriteArrayList<>(values)), -1));
             sendResponse(client, new RespInteger(values.size()));
         } else {
             array.values().addAll(values);

@@ -52,19 +52,19 @@ public final class RespArray extends AbstractRespValue {
         if (obj == null || obj.getClass() != this.getClass()) return false;
         var that = (RespArray) obj;
         return Objects.equals(this.values, that.values) &&
-               this.size() == that.size();
+               this.getSize() == that.getSize();
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(values, size());
+        return Objects.hash(values, getSize());
     }
 
     @Override
     public String toString() {
         return "RespArray[" +
                "values=" + values + ", " +
-               "size=" + size() + ']';
+               "size=" + getSize() + ']';
     }
 
 }

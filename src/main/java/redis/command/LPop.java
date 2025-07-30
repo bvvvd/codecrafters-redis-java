@@ -18,6 +18,7 @@ public final class LPop extends AbstractRedisCommand {
     private final RespBulkString key;
     private final ConcurrentMap<RespValue, CachedValue<RespValue>> cache;
     private final byte[] originalBytes;
+    private final int range;
 
     public LPop(List<RespValue> tokens, byte[] originalBytes, ConcurrentMap<RespValue, CachedValue<RespValue>> cache, RedisConfig config, ReplicationService replicationService) {
         super(config, replicationService);
@@ -28,19 +29,30 @@ public final class LPop extends AbstractRedisCommand {
 
         this.key = respKey;
         this.cache = cache;
+        if (tokens.size() > 2 && tokens.get(2) instanceof RespBulkString respRange) {
+            this.range = Integer.parseInt(respRange.value());
+        } else {
+            this.range = 1;
+        }
         this.originalBytes = originalBytes;
     }
 
     @Override
     protected void handleCommand(RedisSocket client) {
-        List<RespValue> cachedValues
-                = ((RespArray) cache.getOrDefault(key,
-                        new CachedValue<>(
-                                new RespArray(List.of(
-                                        new RespBulkString(null))), -1))
-                .getValue())
-                .values();
-        sendResponse(client, cachedValues.removeFirst());
+        CachedValue<RespValue> cachedValue = cache.get(key);
+        if (cachedValue == null || !(cachedValue.getValue() instanceof RespArray array) || array.values().isEmpty()) {
+            sendResponse(client, new RespBulkString(null));
+        } else if (array.values().size() <= range) {
+            cache.remove(key);
+            sendResponse(client, array);
+        } else if (range == 1) {
+            sendResponse(client, array.values().removeFirst());
+        } else {
+            List<RespValue> output = array.values().subList(0, Math.min(range, array.getSize()));
+            List<RespValue> newArray = array.values().subList(Math.min(range, array.values().size()), array.values().size());
+            cache.put(key, new CachedValue<>(new RespArray(newArray), -1));
+            sendResponse(client, new RespArray(output));
+        }
     }
 
     @Override

@@ -51,18 +51,18 @@ public final class RespDouble extends AbstractRespValue {
         if (obj == null || obj.getClass() != this.getClass()) return false;
         var that = (RespDouble) obj;
         return Double.doubleToLongBits(this.value) == Double.doubleToLongBits(that.value) &&
-               this.size() == that.size();
+               this.getSize() == that.getSize();
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(value, size());
+        return Objects.hash(value, getSize());
     }
 
     @Override
     public String toString() {
         return "RespDouble[" +
                "value=" + value + ", " +
-               "size=" + size() + ']';
+               "size=" + getSize() + ']';
     }
 }

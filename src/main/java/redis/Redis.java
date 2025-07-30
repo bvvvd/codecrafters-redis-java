@@ -65,7 +65,6 @@ public class Redis implements AutoCloseable {
                     debug("Client disconnected: %s", client);
                 });
             }
-            debug("nu kak-to menya tut bit ne dolzhno");
         } catch (Exception e) {
             debug("Failed to start Redis server on port %d: %s%n", config.getPort(), e.getMessage());
         } finally {

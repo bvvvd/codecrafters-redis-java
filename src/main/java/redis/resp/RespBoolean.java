@@ -15,7 +15,7 @@ public final class RespBoolean extends AbstractRespValue {
     }
 
     @Override
-    public int size() {
+    public int getSize() {
         return 4;
     }
 

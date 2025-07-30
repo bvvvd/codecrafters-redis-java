@@ -58,18 +58,18 @@ public final class RespInteger extends AbstractRespValue {
         if (obj == null || obj.getClass() != this.getClass()) return false;
         var that = (RespInteger) obj;
         return this.value == that.value &&
-               this.size() == that.size();
+               this.getSize() == that.getSize();
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(value, size());
+        return Objects.hash(value, getSize());
     }
 
     @Override
     public String toString() {
         return "RespInteger[" +
                "value=" + value + ", " +
-               "size=" + size() + ']';
+               "size=" + getSize() + ']';
     }
 }

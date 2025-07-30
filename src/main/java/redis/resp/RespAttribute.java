@@ -38,12 +38,12 @@ public final class RespAttribute extends AbstractRespValue {
         var that = (RespAttribute) obj;
         return Objects.equals(this.values, that.values) &&
                Objects.equals(this.metadata, that.metadata) &&
-               this.size() == that.size();
+               this.getSize() == that.getSize();
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(values, metadata, size());
+        return Objects.hash(values, metadata, getSize());
     }
 
     @Override
@@ -51,6 +51,6 @@ public final class RespAttribute extends AbstractRespValue {
         return "RespAttribute[" +
                "values=" + values + ", " +
                "metadata=" + metadata + ", " +
-               "size=" + size() + ']';
+               "size=" + getSize() + ']';
     }
 }

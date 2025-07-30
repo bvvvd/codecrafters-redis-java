@@ -64,12 +64,12 @@ public final class RespVerbatimString extends AbstractRespValue {
         var that = (RespVerbatimString) obj;
         return Objects.equals(this.encoding, that.encoding) &&
                Objects.equals(this.value, that.value) &&
-               this.size() == that.size();
+               this.getSize() == that.getSize();
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(encoding, value, size());
+        return Objects.hash(encoding, value, getSize());
     }
 
     @Override
@@ -77,6 +77,6 @@ public final class RespVerbatimString extends AbstractRespValue {
         return "RespVerbatimString[" +
                "encoding=" + encoding + ", " +
                "value=" + value + ", " +
-               "size=" + size() + ']';
+               "size=" + getSize() + ']';
     }
 }

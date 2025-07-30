@@ -12,7 +12,7 @@ public abstract sealed class AbstractRespValue implements RespValue permits Resp
     }
 
     @Override
-    public int size() {
+    public int getSize() {
         if (size < 0) {
             return serialize().length;
         }

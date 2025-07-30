@@ -36,18 +36,18 @@ public final class RespBigNumber extends AbstractRespValue {
         if (obj == null || obj.getClass() != this.getClass()) return false;
         var that = (RespBigNumber) obj;
         return Objects.equals(this.value, that.value) &&
-               this.size() == that.size();
+               this.getSize() == that.getSize();
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(value, size());
+        return Objects.hash(value, getSize());
     }
 
     @Override
     public String toString() {
         return "RespBigNumber[" +
                "value=" + value + ", " +
-               "size=" + size() + ']';
+               "size=" + getSize() + ']';
     }
 }
