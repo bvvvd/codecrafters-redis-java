@@ -18,6 +18,7 @@ import java.util.concurrent.ConcurrentMap;
 import static redis.util.Logger.debug;
 
 public final class Get extends AbstractRedisCommand {
+    public static final String CODE = "GET";
     private final RespBulkString key;
     private final ConcurrentMap<RespValue, CachedValue<RespValue>> cache;
     private final PersistentFileReader dumpFileReader;

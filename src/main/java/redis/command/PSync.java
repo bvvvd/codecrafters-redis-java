@@ -8,6 +8,7 @@ import redis.resp.RespSimpleString;
 import static redis.util.Logger.debug;
 
 public final class PSync extends AbstractRedisCommand {
+    public static final String CODE = "PSYNC";
 
     public PSync(RedisConfig config, ReplicationService replicationService) {
         super(config, replicationService);

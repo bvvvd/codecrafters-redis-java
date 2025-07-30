@@ -5,10 +5,11 @@ import redis.config.RedisConfig;
 import redis.replication.ReplicationService;
 import redis.resp.RespSimpleString;
 
-import static redis.config.Constants.PONG;
 import static redis.util.Logger.debug;
 
 public final class Ping extends AbstractRedisCommand {
+    public static final String CODE = "PING";
+    public static final String PONG = "PONG";
 
     public Ping(RedisConfig config, ReplicationService replicationService) {
         super(config, replicationService);

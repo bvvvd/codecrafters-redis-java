@@ -17,6 +17,7 @@ import java.util.concurrent.TimeUnit;
 import static redis.util.Logger.debug;
 
 public final class Wait extends AbstractRedisCommand {
+    public static final String CODE = "WAIT";
     private final int numberOfReplicas;
     private final int timeout;
 

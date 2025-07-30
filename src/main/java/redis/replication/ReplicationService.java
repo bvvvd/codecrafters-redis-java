@@ -3,9 +3,9 @@ package redis.replication;
 import redis.RedisCommandBuilder;
 import redis.RedisSocket;
 import redis.cache.CachedValue;
+import redis.command.Ping;
 import redis.command.RedisCommand;
 import redis.command.Set;
-import redis.config.Constants;
 import redis.config.RedisConfig;
 import redis.exception.RedisException;
 import redis.resp.*;
@@ -25,7 +25,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static redis.config.Constants.PONG;
 import static redis.util.Logger.debug;
 import static redis.util.Logger.error;
 
@@ -36,8 +35,8 @@ public class ReplicationService implements AutoCloseable {
     private final AtomicLong offset;
     private final Parser parser;
     private final RedisCommandBuilder commandBuilder;
-    private volatile boolean fullSyncCompleted;
     private final String fullResyncMessage;
+    private volatile boolean fullSyncCompleted;
     private volatile RedisCommand lastCommand;
     private volatile CountDownLatch waitLatch;
 
@@ -130,9 +129,9 @@ public class ReplicationService implements AutoCloseable {
     }
 
     private boolean handshake(RedisSocket socket) {
-        write(socket, new RespArray(List.of(new RespBulkString(Constants.PING))));
+        write(socket, new RespArray(List.of(new RespBulkString(Ping.CODE))));
         byte[] buffer = socket.read(256).orElse(null);
-        if (buffer == null || !(parser.parse(buffer).getFirst() instanceof RespSimpleString respSimpleString) || !respSimpleString.value().equalsIgnoreCase(PONG)) {
+        if (buffer == null || !(parser.parse(buffer).getFirst() instanceof RespSimpleString respSimpleString) || !respSimpleString.value().equalsIgnoreCase(Ping.PONG)) {
             return false;
         }
 
@@ -189,12 +188,12 @@ public class ReplicationService implements AutoCloseable {
         socket.write(respArray.serialize());
     }
 
-    public void setLastCommand(RedisCommand redisCommand) {
-        this.lastCommand = redisCommand;
-    }
-
     public RedisCommand getLastCommand() {
         return lastCommand;
+    }
+
+    public void setLastCommand(RedisCommand redisCommand) {
+        this.lastCommand = redisCommand;
     }
 
     public void setLatch(CountDownLatch latch) {

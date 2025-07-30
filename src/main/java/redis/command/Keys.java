@@ -15,6 +15,7 @@ import java.util.List;
 import static redis.util.Logger.debug;
 
 public final class Keys extends AbstractRedisCommand {
+    public static final String CODE = "KEYS";
     private final DumpFileReader dumpFileReader;
 
     public Keys(List<RespValue> tokens, RedisConfig config, ReplicationService replicationService) {

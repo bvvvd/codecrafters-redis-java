@@ -14,6 +14,7 @@ import java.util.Objects;
 import static redis.util.Logger.debug;
 
 public final class Echo extends AbstractRedisCommand {
+    public static final String CODE = "ECHO";
     private final RespValue value;
 
     public Echo(List<RespValue> tokens, RedisConfig config, ReplicationService replicationService) {

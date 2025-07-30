@@ -15,6 +15,7 @@ import java.util.Objects;
 import static redis.util.Logger.debug;
 
 public final class ReplConf extends AbstractRedisCommand {
+    public static final String CODE = "REPLCONF";
     private final Mode mode;
     private final String value;
     private final int length;
@@ -113,5 +114,22 @@ public final class ReplConf extends AbstractRedisCommand {
         return "ReplConf[" +
                "mode=" + mode + ", " +
                "value=" + value + ']';
+    }
+
+    private enum Mode {
+        GET_ACK("GETACK"),
+        ACK("ACK"),
+        LISTENING_PORT("LISTENING-PORT"),
+        CAPA("CAPA");
+
+        private final String mode;
+
+        Mode(String mode) {
+            this.mode = mode;
+        }
+
+        public String getMode() {
+            return mode;
+        }
     }
 }

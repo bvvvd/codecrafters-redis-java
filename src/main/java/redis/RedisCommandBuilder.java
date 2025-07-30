@@ -12,8 +12,6 @@ import redis.resp.RespValue;
 import java.util.List;
 import java.util.concurrent.ConcurrentMap;
 
-import static redis.config.Constants.*;
-
 public class RedisCommandBuilder {
     private final RedisConfig config;
     private final ConcurrentMap<RespValue, CachedValue<RespValue>> cache;
@@ -40,16 +38,17 @@ public class RedisCommandBuilder {
         RespValue commandIdentifier = tokens.getFirst();
         if (commandIdentifier instanceof RespBulkString respBulkString) {
             return switch (respBulkString.value().toUpperCase()) {
-                case PING -> new Ping(config, replicationService);
-                case ECHO_COMMAND_CONTENT -> new Echo(tokens, config, replicationService);
-                case SET_COMMAND_CONTENT -> new Set(tokens, array.serialize(), config, cache, replicationService);
-                case GET_COMMAND_CONTENT -> new Get(tokens, cache, config, replicationService);
-                case CONFIG_COMMAND_PREFIX_CONTENT -> new ConfigGet(tokens, config, replicationService);
-                case KEYS_COMMAND_CONTENT -> new Keys(tokens, config, replicationService);
-                case INFO_COMMAND_PREFIX_CONTENT -> new Info(config, replicationService);
-                case REPLCONF_COMMAND_PREFIX_CONTENT -> new ReplConf(tokens, array.serialize().length, config, replicationService);
-                case PSYNC_COMMAND_PREFIX_CONTENT -> new PSync(config, replicationService);
-                case WAIT_COMMAND_PREFIX_CONTENT -> new Wait(tokens, config, replicationService);
+                case Ping.CODE -> new Ping(config, replicationService);
+                case Echo.CODE -> new Echo(tokens, config, replicationService);
+                case Set.CODE -> new Set(tokens, array.serialize(), config, cache, replicationService);
+                case Get.CODE -> new Get(tokens, cache, config, replicationService);
+                case ConfigGet.CODE -> new ConfigGet(tokens, config, replicationService);
+                case Keys.CODE -> new Keys(tokens, config, replicationService);
+                case Info.CODE -> new Info(config, replicationService);
+                case ReplConf.CODE -> new ReplConf(tokens, array.serialize().length, config, replicationService);
+                case PSync.CODE -> new PSync(config, replicationService);
+                case Wait.CODE -> new Wait(tokens, config, replicationService);
+                case RPush.CODE -> new RPush(tokens, array.serialize(), config, cache, replicationService);
                 default -> throw new RedisException("unsupported command: " + respBulkString.value());
             };
         }

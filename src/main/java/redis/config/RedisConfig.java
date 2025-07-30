@@ -3,21 +3,16 @@ package redis.config;
 import redis.exception.RedisException;
 
 public class RedisConfig {
+    public static final String DEFAULT_DIR = "/tmp/redis-data";
+    public static final String DEFAULT_RDB_FILENAME = "dump.rdb";
+    public static final int DEFAULT_PORT = 6379;
     private static final String REPLICATION_ID = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb";
-    private String dir = Constants.DEFAULT_DIR;
-    private String dbFileName = Constants.DEFAULT_RDB_FILENAME;
-    private int port = Constants.DEFAULT_PORT;
+    private String dir = DEFAULT_DIR;
+    private String dbFileName = DEFAULT_RDB_FILENAME;
+    private int port = DEFAULT_PORT;
     private String role = "master";
     private String masterHost;
     private int masterPort;
-
-    @Override
-    public String toString() {
-        return "RedisConfig{" +
-               "dir='" + dir + '\'' +
-               ", dbFileName='" + dbFileName + '\'' +
-               '}';
-    }
 
     public RedisConfig(String[] args) {
         if (args != null && args.length > 0) {
@@ -75,6 +70,14 @@ public class RedisConfig {
                 }
             }
         }
+    }
+
+    @Override
+    public String toString() {
+        return "RedisConfig{" +
+               "dir='" + dir + '\'' +
+               ", dbFileName='" + dbFileName + '\'' +
+               '}';
     }
 
     public String getDir() {

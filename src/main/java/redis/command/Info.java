@@ -8,6 +8,8 @@ import redis.resp.RespBulkString;
 import static redis.util.Logger.debug;
 
 public final class Info extends AbstractRedisCommand {
+    public static final String CODE = "INFO";
+
     public Info(RedisConfig config, ReplicationService replicationService) {
         super(config, replicationService);
     }

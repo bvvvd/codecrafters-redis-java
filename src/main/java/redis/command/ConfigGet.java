@@ -11,16 +11,16 @@ import redis.resp.RespValue;
 import java.util.List;
 import java.util.Objects;
 
-import static redis.config.Constants.GET_COMMAND_CONTENT;
 import static redis.util.Logger.debug;
 
 public final class ConfigGet extends AbstractRedisCommand {
+    public static final String CODE = "CONFIG";
     private final String pattern;
 
     public ConfigGet(List<RespValue> tokens, RedisConfig config, ReplicationService replicationService) {
         super(config, replicationService);
         if (tokens.size() < 2 || !(tokens.get(1) instanceof RespBulkString respBulkString)
-            || !respBulkString.value().equalsIgnoreCase(GET_COMMAND_CONTENT)) {
+            || !respBulkString.value().equalsIgnoreCase(Get.CODE)) {
             throw new RedisException("CONFIG command requires a valid subcommand");
 
         }

@@ -14,10 +14,11 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentMap;
 
-import static redis.config.Constants.EXPIRATION_TOKEN_CONTENT;
 import static redis.util.Logger.debug;
 
 public final class Set extends AbstractRedisCommand {
+    public static final String CODE = "SET";
+    public static final String EXPIRATION_TOKEN_CONTENT = "PX";
     private final RespValue key;
     private final RespValue value;
     private final long expirationTime;

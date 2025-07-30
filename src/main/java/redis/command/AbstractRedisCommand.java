@@ -7,7 +7,7 @@ import redis.resp.RespValue;
 
 import static redis.util.Logger.debug;
 
-public abstract sealed class AbstractRedisCommand implements RedisCommand permits ConfigGet, Echo, Get, Info, Keys, PSync, Ping, ReplConf, Set, Wait {
+public abstract sealed class AbstractRedisCommand implements RedisCommand permits ConfigGet, Echo, Get, Info, Keys, PSync, Ping, RPush, ReplConf, Set, Wait {
     protected final RedisConfig config;
     protected final ReplicationService replicationService;
 

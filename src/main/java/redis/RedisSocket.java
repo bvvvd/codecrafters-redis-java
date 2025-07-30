@@ -25,7 +25,7 @@ public class RedisSocket implements AutoCloseable {
         try {
             do {
                 totalBytesRead += read(buffer);
-            } while (totalBytesRead > 0 && buffer.limit() > buffer.position() && buffer.get(buffer.position()-1) != (byte)'\n');
+            } while (totalBytesRead > 0 && buffer.limit() > buffer.position() && buffer.get(buffer.position() - 1) != (byte) '\n');
         } catch (IOException e) {
             error("Got exception while reading: %s", e.getMessage());
             close();
@@ -35,7 +35,7 @@ public class RedisSocket implements AutoCloseable {
         var message = new byte[messageSize];
         buffer.get(message, 0, messageSize);
         if (message.length > 0) {
-            debug("Received message: %s",  new String(message));
+            debug("Received message: %s", new String(message));
             return Optional.of(message);
         }
         return Optional.empty();
