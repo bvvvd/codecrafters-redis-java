@@ -16,29 +16,29 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentMap;
 
-public final class RPush extends AbstractRedisCommand {
-    public static final String CODE = "RPUSH";
-    private final RespValue key;
+public final class LPush extends AbstractRedisCommand {
+    public static final String CODE = "LPUSH";
+    private final RespBulkString key;
     private final List<RespValue> values;
     private final byte[] originalBytes;
     private final ConcurrentMap<RespValue, CachedValue<RespValue>> cache;
 
-    public RPush(List<RespValue> tokens, byte[] originalBytes, RedisConfig config, ConcurrentMap<RespValue, CachedValue<RespValue>> cache, ReplicationService replicationService) {
+    public LPush(List<RespValue> tokens, byte[] originalBytes, RedisConfig config, ConcurrentMap<RespValue, CachedValue<RespValue>> cache, ReplicationService replicationService) {
         super(config, replicationService);
 
         if (tokens.size() < 3 || !(tokens.get(1) instanceof RespBulkString respKey)) {
-            throw new RedisException("RPush command requires at least a key and a value");
+            throw new RedisException("LPush command requires at least a key and a value");
         }
         List<RespValue> respValues = new ArrayList<>();
         for (int i = 2; i < tokens.size(); i++) {
             if (tokens.get(i) instanceof RespBulkString value) {
                 respValues.add(value);
             } else {
-                throw new RedisException("RPush command requires values to be of type RespBulkString");
+                throw new RedisException("LPush command requires values to be of type RespBulkString");
             }
         }
         this.key = respKey;
-        this.values = respValues;
+        this.values = respValues.reversed();
         this.originalBytes = originalBytes;
         this.cache = cache;
     }
@@ -46,20 +46,19 @@ public final class RPush extends AbstractRedisCommand {
     @Override
     protected void handleCommand(RedisSocket client) {
         CachedValue<RespValue> cachedValue = cache.get(key);
-        if (cachedValue == null || !(cachedValue.getValue() instanceof RespArray array)) {
-            cache.put(key, new CachedValue<>(new RespArray(new ArrayList<>(values)), -1));
-            sendResponse(client, new RespInteger(values.size()));
-        } else {
-            array.values().addAll(values);
-            sendResponse(client, new RespInteger(array.values().size()));
+        ArrayList<RespValue> newArray = new ArrayList<>(values);
+        if (cachedValue != null && cachedValue.getValue() instanceof RespArray array) {
+            newArray.addAll(array.values());
         }
+        cache.put(key, new CachedValue<>(new RespArray(newArray), -1));
+        sendResponse(client, new RespInteger(newArray.size()));
     }
 
     @Override
     public String toString() {
-        return "RPush{" +
+        return "LPush{" +
                "key=" + key +
-               ", value=" + values +
+               ", values=" + values +
                ", originalBytes=" + Arrays.toString(originalBytes) +
                ", cache=" + cache +
                '}';
@@ -68,8 +67,8 @@ public final class RPush extends AbstractRedisCommand {
     @Override
     public boolean equals(Object o) {
         if (o == null || getClass() != o.getClass()) return false;
-        RPush rPush = (RPush) o;
-        return Objects.equals(key, rPush.key) && Objects.equals(values, rPush.values) && Objects.deepEquals(originalBytes, rPush.originalBytes) && Objects.equals(cache, rPush.cache);
+        LPush lPush = (LPush) o;
+        return Objects.equals(key, lPush.key) && Objects.equals(values, lPush.values) && Objects.deepEquals(originalBytes, lPush.originalBytes) && Objects.equals(cache, lPush.cache);
     }
 
     @Override

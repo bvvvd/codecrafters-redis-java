@@ -50,6 +50,7 @@ public class RedisCommandBuilder {
                 case Wait.CODE -> new Wait(tokens, config, replicationService);
                 case RPush.CODE -> new RPush(tokens, array.serialize(), config, cache, replicationService);
                 case LRange.CODE -> new LRange(tokens, cache, config, replicationService);
+                case LPush.CODE -> new LPush(tokens, array.serialize(), config, cache, replicationService);
                 default -> throw new RedisException("unsupported command: " + respBulkString.value());
             };
         }

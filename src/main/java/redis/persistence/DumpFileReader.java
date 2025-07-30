@@ -176,8 +176,7 @@ public class DumpFileReader implements PersistentFileReader {
     }
 
     private String readString(BufferedInputStream inputStream, int length) throws IOException {
-        String readString = new String(inputStream.readNBytes(length));
-        return readString;
+        return new String(inputStream.readNBytes(length));
     }
 
     private void skipUnknown(BufferedInputStream inputStream) throws IOException {
