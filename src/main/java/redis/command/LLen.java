@@ -3,6 +3,7 @@ package redis.command;
 import redis.RedisSocket;
 import redis.cache.CachedValue;
 import redis.config.RedisConfig;
+import redis.exception.RedisException;
 import redis.replication.ReplicationService;
 import redis.resp.RespArray;
 import redis.resp.RespInteger;
@@ -21,7 +22,7 @@ public final class LLen extends AbstractRedisCommand {
         super(config, replicationService);
 
         if (tokens.size() != 2 || !(tokens.get(1) instanceof RespValue respKey)) {
-            throw new IllegalArgumentException("LLEN command requires exactly one key argument");
+            throw new RedisException("LLEN command requires exactly one key argument");
         }
 
         this.key = respKey;
