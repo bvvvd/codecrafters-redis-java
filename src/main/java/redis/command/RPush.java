@@ -3,6 +3,7 @@ package redis.command;
 import redis.RedisSocket;
 import redis.cache.CachedValue;
 import redis.config.RedisConfig;
+import redis.exception.RedisException;
 import redis.replication.ReplicationService;
 import redis.resp.RespArray;
 import redis.resp.RespBulkString;
@@ -17,7 +18,7 @@ import java.util.concurrent.ConcurrentMap;
 
 public final class RPush extends AbstractRedisCommand {
     public static final String CODE = "RPUSH";
-    private final RespBulkString key;
+    private final RespValue key;
     private final List<RespValue> values;
     private final byte[] originalBytes;
     private final ConcurrentMap<RespValue, CachedValue<RespValue>> cache;
@@ -26,14 +27,14 @@ public final class RPush extends AbstractRedisCommand {
         super(config, replicationService);
 
         if (tokens.size() < 3 || !(tokens.get(1) instanceof RespBulkString key)) {
-            throw new IllegalArgumentException("RPush command requires at least a key and a value");
+            throw new RedisException("RPush command requires at least a key and a value");
         }
         List<RespValue> respValues = new ArrayList<>();
         for (int i = 2; i < tokens.size(); i++) {
             if (tokens.get(i) instanceof RespBulkString value) {
                 respValues.add(value);
             } else {
-                throw new IllegalArgumentException("RPush command requires values to be of type RespBulkString");
+                throw new RedisException("RPush command requires values to be of type RespBulkString");
             }
         }
         this.key = key;
@@ -45,11 +46,10 @@ public final class RPush extends AbstractRedisCommand {
     @Override
     protected void handleCommand(RedisSocket client) {
         CachedValue<RespValue> cachedValue = cache.get(key);
-        if (cachedValue == null) {
+        if (cachedValue == null || !(cachedValue.getValue() instanceof RespArray array)) {
             cache.put(key, new CachedValue<>(new RespArray(new ArrayList<>(values)), -1));
             sendResponse(client, new RespInteger(values.size()));
         } else {
-            RespArray array = (RespArray) cachedValue.getValue();
             array.values().addAll(values);
             sendResponse(client, new RespInteger(array.values().size()));
         }

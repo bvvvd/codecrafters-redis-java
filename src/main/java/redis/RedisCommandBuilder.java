@@ -49,6 +49,7 @@ public class RedisCommandBuilder {
                 case PSync.CODE -> new PSync(config, replicationService);
                 case Wait.CODE -> new Wait(tokens, config, replicationService);
                 case RPush.CODE -> new RPush(tokens, array.serialize(), config, cache, replicationService);
+                case LRange.CODE -> new LRange(tokens, cache, config, replicationService);
                 default -> throw new RedisException("unsupported command: " + respBulkString.value());
             };
         }
