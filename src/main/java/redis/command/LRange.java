@@ -43,13 +43,8 @@ public final class LRange extends AbstractRedisCommand {
         if (cachedValue == null || !(cachedValue.getValue() instanceof RespArray array)) {
             sendResponse(client, new RespArray(List.of()));
         } else {
-            debug("Normalizing index: " + start + " for list of size: " + array.values().size());
             int from = normalize(start, array.values());
-            debug("Normalized index: " + from);
-
-            debug("Normalizing index: " + end + " for list of size: " + array.values().size());
             int to = normalize(end, array.values());
-            debug("Normalized index: " + to);
             List<RespValue> values = array.values().subList(from, Math.min(array.values().size(), to + 1));
             sendResponse(client, new RespArray(values));
         }
