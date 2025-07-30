@@ -9,6 +9,7 @@ import redis.resp.RespBulkString;
 import redis.resp.RespInteger;
 import redis.resp.RespValue;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -35,8 +36,15 @@ public final class RPush extends AbstractRedisCommand {
 
     @Override
     protected void handleCommand(RedisSocket client) {
-        cache.put(key, new CachedValue<>(new RespArray(List.of(value)), -1));
-        sendResponse(client, new RespInteger(1));
+        CachedValue<RespValue> cachedValue = cache.get(key);
+        if (cachedValue == null) {
+            cache.put(key, new CachedValue<>(new RespArray(new ArrayList<>(List.of(value))), -1));
+            sendResponse(client, new RespInteger(1));
+        } else {
+            RespArray array = (RespArray) cachedValue.getValue();
+            array.values().add(value);
+            sendResponse(client, new RespInteger(array.values().size()));
+        }
     }
 
     @Override
