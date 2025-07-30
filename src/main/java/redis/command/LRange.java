@@ -7,18 +7,19 @@ import redis.exception.RedisException;
 import redis.replication.ReplicationService;
 import redis.resp.RespArray;
 import redis.resp.RespBulkString;
-import redis.resp.RespInteger;
 import redis.resp.RespValue;
 
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentMap;
 
+import static redis.util.Logger.debug;
+
 public final class LRange extends AbstractRedisCommand {
     public static final String CODE = "LRANGE";
     private final RespValue key;
-    private final long start;
-    private final long end;
+    private final int start;
+    private final int end;
     private final ConcurrentMap<RespValue, CachedValue<RespValue>> cache;
 
     public LRange(List<RespValue> tokens, ConcurrentMap<RespValue, CachedValue<RespValue>> cache, RedisConfig config, ReplicationService replicationService) {
@@ -32,7 +33,7 @@ public final class LRange extends AbstractRedisCommand {
 
         this.key = replKey;
         this.start = Integer.parseInt(replStart.value());
-        this.end = Integer.parseInt(replEnd.value()) + 1;
+        this.end = Integer.parseInt(replEnd.value());
         this.cache = cache;
     }
 
@@ -42,9 +43,27 @@ public final class LRange extends AbstractRedisCommand {
         if (cachedValue == null || !(cachedValue.getValue() instanceof RespArray array)) {
             sendResponse(client, new RespArray(List.of()));
         } else {
-            List<RespValue> values = array.values().subList((int) start, Math.min(array.values().size(), (int) end));
+            debug("Normalizing index: " + start + " for list of size: " + array.values().size());
+            int from = normalize(start, array.values());
+            debug("Normalized index: " + from);
+
+            debug("Normalizing index: " + end + " for list of size: " + array.values().size());
+            int to = normalize(end, array.values());
+            debug("Normalized index: " + to);
+            List<RespValue> values = array.values().subList(from, Math.min(array.values().size(), to + 1));
             sendResponse(client, new RespArray(values));
         }
+    }
+
+    private int normalize(int index, List<RespValue> values) {
+        if (index < 0) {
+            if (-index > values.size()) {
+                return 0;
+            }
+            return (index % values.size()) + values.size();
+        }
+
+        return index;
     }
 
     @Override
