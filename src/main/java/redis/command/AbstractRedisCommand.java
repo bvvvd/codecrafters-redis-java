@@ -3,11 +3,12 @@ package redis.command;
 import redis.RedisSocket;
 import redis.config.RedisConfig;
 import redis.replication.ReplicationService;
+import redis.resp.RespBulkError;
 import redis.resp.RespValue;
 
 import static redis.util.Logger.debug;
 
-public abstract sealed class AbstractRedisCommand implements RedisCommand permits ConfigGet, Echo, Get, Info, Keys, LLen, LPop, LPush, LRange, PSync, Ping, RPush, ReplConf, Set, Wait {
+public abstract sealed class AbstractRedisCommand implements RedisCommand permits BLPop, ConfigGet, Echo, Get, Info, Keys, LLen, LPop, LPush, LRange, PSync, Ping, RPush, ReplConf, Set, Wait {
     protected final RedisConfig config;
     protected final ReplicationService replicationService;
 
@@ -20,8 +21,13 @@ public abstract sealed class AbstractRedisCommand implements RedisCommand permit
 
     @Override
     public final void handle(RedisSocket client) {
-        handleCommand(client);
-        replicationService.setLastCommand(this);
+        try {
+            handleCommand(client);
+            replicationService.setLastCommand(this);
+        } catch (Exception e) {
+            debug("Error handling command: %s", e.getMessage());
+            sendResponse(client, new RespBulkError(e.getMessage()));
+        }
     }
 
     protected void sendResponse(RedisSocket client, RespValue response) {

@@ -9,6 +9,7 @@ import redis.resp.RespArray;
 import redis.resp.RespBulkString;
 import redis.resp.RespInteger;
 import redis.resp.RespValue;
+import redis.util.LockAndCondition;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -16,10 +17,13 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+
+import static redis.util.Logger.error;
 
 public final class RPush extends AbstractRedisCommand {
     public static final String CODE = "RPUSH";
-    private final RespValue key;
+    private final RespBulkString key;
     private final List<RespValue> values;
     private final byte[] originalBytes;
     private final ConcurrentMap<RespValue, CachedValue<RespValue>> cache;
@@ -46,13 +50,20 @@ public final class RPush extends AbstractRedisCommand {
 
     @Override
     protected void handleCommand(RedisSocket client) {
-        CachedValue<RespValue> cachedValue = cache.get(key);
-        if (cachedValue == null || !(cachedValue.getValue() instanceof RespArray array)) {
-            cache.put(key, new CachedValue<>(new RespArray(new CopyOnWriteArrayList<>(values)), -1));
-            sendResponse(client, new RespInteger(values.size()));
-        } else {
-            array.values().addAll(values);
-            sendResponse(client, new RespInteger(array.values().size()));
+        CountDownLatch latch = replicationService.getPopLatch(key);
+        try {
+            CachedValue<RespValue> cachedValue = cache.get(key);
+            if (cachedValue == null || !(cachedValue.getValue() instanceof RespArray array)) {
+                cache.put(key, new CachedValue<>(new RespArray(new CopyOnWriteArrayList<>(values)), -1));
+                sendResponse(client, new RespInteger(values.size()));
+            } else {
+                array.values().addAll(values);
+                sendResponse(client, new RespInteger(array.values().size()));
+            }
+        } catch (Exception e) {
+            throw new RedisException("Error processing LPush command: " + e);
+        } finally {
+            latch.countDown();
         }
     }
 

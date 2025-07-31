@@ -19,10 +19,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static redis.util.Logger.debug;
@@ -39,6 +37,7 @@ public class ReplicationService implements AutoCloseable {
     private volatile boolean fullSyncCompleted;
     private volatile RedisCommand lastCommand;
     private volatile CountDownLatch waitLatch;
+    private final ConcurrentMap<RespValue, CountDownLatch> popLatches;
 
     public ReplicationService(ExecutorService propagationExecutor, long initialOffset, RedisConfig config, ConcurrentMap<RespValue, CachedValue<RespValue>> cache) {
         this.config = config;
@@ -48,6 +47,7 @@ public class ReplicationService implements AutoCloseable {
         this.parser = new Parser();
         this.commandBuilder = new RedisCommandBuilder(config, cache, this);
         this.fullResyncMessage = "+FULLRESYNC " + config.getReplicationId() + " 0\r\n";
+        this.popLatches = new ConcurrentHashMap<>();
     }
 
     public void addReplica(RedisSocket clientSocket) {
@@ -112,13 +112,18 @@ public class ReplicationService implements AutoCloseable {
         }
 
         propagationExecutor.submit(() -> {
+            AtomicBoolean log = new AtomicBoolean(true);
             while (socket.isConnected()) {
                 try {
-                    debug("Waiting for commands from master at %s:%d", config.getMasterHost(), config.getMasterPort());
+                    if (log.get()) {
+                        log.set(false);
+                        debug("Waiting for commands from master at %s:%d", config.getMasterHost(), config.getMasterPort());
+                    }
                     socket.read(256).ifPresent(read -> {
                         List<RespValue> respValues = parser.parse(read);
                         List<RedisCommand> commands = commandBuilder.build(respValues);
                         commands.forEach(command -> command.handle(socket));
+                        log.set(true);
                     });
                 } catch (Exception e) {
                     error("Error serving client: %s%n", e.getMessage());
@@ -176,7 +181,6 @@ public class ReplicationService implements AutoCloseable {
     }
 
     public void moveOffset(int length) {
-        debug("Moving offset by: %d", length);
         offset.addAndGet(length);
     }
 
@@ -202,5 +206,17 @@ public class ReplicationService implements AutoCloseable {
 
     public CountDownLatch getWaitLatch() {
         return waitLatch;
+    }
+
+    public CountDownLatch getPopLatch(RespBulkString key) {
+        return popLatches.computeIfAbsent(key, k -> {
+//            ReentrantLock lock = new ReentrantLock(true);
+//            return new LockAndCondition(lock, lock.newCondition());
+            return new CountDownLatch(1);
+        });
+    }
+
+    public void removePopLock(RespBulkString key) {
+        popLatches.remove(key);
     }
 }

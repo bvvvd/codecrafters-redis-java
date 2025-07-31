@@ -53,6 +53,7 @@ public class RedisCommandBuilder {
                 case LPush.CODE -> new LPush(tokens, array.serialize(), config, cache, replicationService);
                 case LLen.CODE -> new LLen(tokens, cache, config, replicationService);
                 case LPop.CODE -> new LPop(tokens, array.serialize(), cache, config, replicationService);
+                case BLPop.CODE -> new BLPop(tokens, cache, config, replicationService);
                 default -> throw new RedisException("unsupported command: " + respBulkString.value());
             };
         }
