@@ -58,12 +58,11 @@ public final class RPush extends AbstractRedisCommand {
                 sendResponse(client, new RespInteger(values.size()));
             } else {
                 array.values().addAll(values);
+                latch.countDown();
                 sendResponse(client, new RespInteger(array.values().size()));
             }
         } catch (Exception e) {
             throw new RedisException("Error processing LPush command: " + e);
-        } finally {
-            latch.countDown();
         }
     }
 

@@ -58,11 +58,10 @@ public final class LPush extends AbstractRedisCommand {
                 newArray.addAll(array.values());
             }
             cache.put(key, new CachedValue<>(new RespArray(newArray), -1));
+            latch.countDown();
             sendResponse(client, new RespInteger(newArray.size()));
         } catch (Exception e) {
             throw new RedisException("Error processing LPush command: " + e);
-        } finally {
-            latch.countDown();
         }
     }
 
