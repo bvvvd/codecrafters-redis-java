@@ -38,6 +38,11 @@ public abstract sealed class AbstractRedisCommand implements RedisCommand permit
 
     protected void sendResponse(RedisSocket client, byte[] serializedResponse) {
         debug("Sending response: %s", new String(serializedResponse));
-        client.write(serializedResponse);
+        try {
+            client.write(serializedResponse);
+        } catch (Exception e) {
+            debug("Error sending response: %s", e);
+            throw new RuntimeException("Failed to send response to client", e);
+        }
     }
 }
