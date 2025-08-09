@@ -26,10 +26,9 @@ public class DumpFileReader implements PersistentFileReader {
         String filePath = "%s/%s".formatted(config.getDir(), config.getDbFileName());
         try {
             BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(filePath));
-            debug("reading a file: %s", filePath);
             return readInternally(inputStream);
         } catch (IOException e) {
-            error("Failed to read dump file '%s': %s%n", filePath, e.getMessage());
+//            error("Failed to read dump file '%s': %s%n", filePath, e.getMessage());
             return FALLBACK_READER.read();
         }
     }
@@ -189,6 +188,6 @@ public class DumpFileReader implements PersistentFileReader {
         else if ((first & 0xC0) == 0x40) return ((first & 0x3F) << 8) | inputStream.read();
         else if ((first & 0xC0) == 0x80)
             return ((long) inputStream.read() << 24) | (inputStream.read() << 16) | (inputStream.read() << 8) | inputStream.read();
-        else throw new IOException("Unsupported length encoding");
+        else return first;
     }
 }

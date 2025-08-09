@@ -34,7 +34,7 @@ public final class Wait extends AbstractRedisCommand {
 
     @Override
     public void handleCommand(RedisSocket client) {
-        debug("Received WAIT command with numslaves: %d and timeout: %d", numberOfReplicas, numberOfReplicas);
+        debug("Received WAIT command with numslaves: %d and timeout: %d", numberOfReplicas, timeout);
         RespInteger response;
         if (replicationService.getLastCommand() instanceof Set) {
             var numReplicas = Math.max(numberOfReplicas, replicationService.getReplicaNumber());

@@ -9,6 +9,7 @@ import redis.command.Set;
 import redis.config.RedisConfig;
 import redis.exception.RedisException;
 import redis.resp.*;
+import redis.util.FirstThenAllLatch;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -37,7 +38,7 @@ public class ReplicationService implements AutoCloseable {
     private volatile boolean fullSyncCompleted;
     private volatile RedisCommand lastCommand;
     private volatile CountDownLatch waitLatch;
-    private final ConcurrentMap<RespValue, CountDownLatch> popLatches;
+    private final ConcurrentMap<RespValue, FirstThenAllLatch> popLatches;
 
     public ReplicationService(ExecutorService propagationExecutor, long initialOffset, RedisConfig config, ConcurrentMap<RespValue, CachedValue<RespValue>> cache) {
         this.config = config;
@@ -208,11 +209,11 @@ public class ReplicationService implements AutoCloseable {
         return waitLatch;
     }
 
-    public CountDownLatch getPopLatch(RespBulkString key) {
+    public FirstThenAllLatch getPopLatch(RespBulkString key) {
         return popLatches.computeIfAbsent(key, k -> {
 //            ReentrantLock lock = new ReentrantLock(true);
 //            return new LockAndCondition(lock, lock.newCondition());
-            return new CountDownLatch(1);
+            return new FirstThenAllLatch();
         });
     }
 

@@ -9,6 +9,7 @@ import redis.resp.RespArray;
 import redis.resp.RespBulkString;
 import redis.resp.RespInteger;
 import redis.resp.RespValue;
+import redis.util.FirstThenAllLatch;
 import redis.util.LockAndCondition;
 
 import java.util.ArrayList;
@@ -50,7 +51,7 @@ public final class LPush extends AbstractRedisCommand {
 
     @Override
     protected void handleCommand(RedisSocket client) {
-        CountDownLatch latch = replicationService.getPopLatch(key);
+        FirstThenAllLatch latch = replicationService.getPopLatch(key);
         try {
             CachedValue<RespValue> cachedValue = cache.get(key);
             List<RespValue> newArray = new CopyOnWriteArrayList<>(values);
@@ -58,7 +59,7 @@ public final class LPush extends AbstractRedisCommand {
                 newArray.addAll(array.values());
             }
             cache.put(key, new CachedValue<>(new RespArray(newArray), -1));
-            latch.countDown();
+            latch.release();
             sendResponse(client, new RespInteger(newArray.size()));
         } catch (Exception e) {
             throw new RedisException("Error processing LPush command: " + e);

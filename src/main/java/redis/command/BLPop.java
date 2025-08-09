@@ -8,12 +8,14 @@ import redis.replication.ReplicationService;
 import redis.resp.RespArray;
 import redis.resp.RespBulkString;
 import redis.resp.RespValue;
+import redis.util.FirstThenAllLatch;
 
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.locks.LockSupport;
 
 import static redis.util.Logger.error;
 
@@ -35,21 +37,19 @@ public final class BLPop extends AbstractRedisCommand {
 
     @Override
     protected void handleCommand(RedisSocket client) {
-        CountDownLatch lock = replicationService.getPopLatch(key);
+        FirstThenAllLatch lock = replicationService.getPopLatch(key);
 
         try {
             Executors.newSingleThreadExecutor().submit(() -> {
                 try {
-                    Thread.sleep(10);
+                    Thread.sleep(200);
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 } finally {
-                    lock.countDown();
+                    lock.release();
                 }
             });
-            lock.await();
-
-            cache.computeIfPresent(key, (k, cachedValue) -> {
+            lock.await(() -> cache.computeIfPresent(key, (k, cachedValue) -> {
                 RespArray array = ((RespArray) cachedValue.value());
                 if (array.values().size() == 1) {
                     RespArray response = new RespArray(List.of(key, array.values().getFirst()));
@@ -60,7 +60,7 @@ public final class BLPop extends AbstractRedisCommand {
                     sendResponse(client, response);
                     return cachedValue;
                 }
-            });
+            }));
         } catch (Exception e) {
             Thread.currentThread().interrupt();
             error("Error handling BLPop command: " + e.getMessage());

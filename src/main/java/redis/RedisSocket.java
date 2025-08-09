@@ -80,4 +80,11 @@ public class RedisSocket implements AutoCloseable {
             error("Got exception while closing: %s", e.getMessage());
         }
     }
+
+    @Override
+    public String toString() {
+        return "RedisSocket{" +
+               "socketChannel=" + socketChannel +
+               '}';
+    }
 }

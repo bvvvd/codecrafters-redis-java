@@ -42,7 +42,7 @@ public class Redis implements AutoCloseable {
         }
 
         try (ServerSocketChannel serverChannel = ServerSocketChannel.open()) {
-            serverChannel.socket().bind(new InetSocketAddress(config.getPort()));
+            serverChannel.socket().bind(new InetSocketAddress("127.0.0.1", config.getPort()));
             serverChannel.socket().setReuseAddress(true);
             serverChannel.configureBlocking(true);
             debug("Redis %s is running on port %d", config.getRole(), config.getPort());
