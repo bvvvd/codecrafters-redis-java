@@ -2,7 +2,6 @@ package redis.replication;
 
 import redis.MainEventLoop;
 import redis.RedisSocket;
-import redis.command.Ping;
 import redis.config.RedisConfig;
 import redis.resp.Parser;
 import redis.resp.RespArray;
@@ -73,9 +72,9 @@ public class EventReplicationService {
     }
 
     private boolean handshake(RedisSocket socket) {
-        write(socket, new RespArray(List.of(new RespBulkString(Ping.CODE))));
+        write(socket, new RespArray(List.of(new RespBulkString("PING"))));
         byte[] buffer = socket.read(256).orElse(null);
-        if (buffer == null || !(parser.parse(buffer).getFirst() instanceof RespSimpleString respSimpleString) || !respSimpleString.value().equalsIgnoreCase(Ping.PONG)) {
+        if (buffer == null || !(parser.parse(buffer).getFirst() instanceof RespSimpleString respSimpleString) || !respSimpleString.value().equalsIgnoreCase("PONG")) {
             return false;
         }
 

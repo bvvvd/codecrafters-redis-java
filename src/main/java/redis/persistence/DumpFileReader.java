@@ -28,7 +28,6 @@ public class DumpFileReader implements PersistentFileReader {
             BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(filePath));
             return readInternally(inputStream);
         } catch (IOException e) {
-//            error("Failed to read dump file '%s': %s%n", filePath, e.getMessage());
             return FALLBACK_READER.read();
         }
     }

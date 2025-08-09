@@ -20,7 +20,6 @@ public class Parser {
                && input[offset.get()] != '\n' && input[offset.get()] != '\r') {
             values.add(parse(input, offset));
         }
-        debug("Parsed RESP values: %s", values);
         return values;
     }
 
@@ -35,7 +34,6 @@ public class Parser {
                && input.get(offset.get()) != '\n' && input.get(offset.get()) != '\r') {
             values.add(parse(input, offset));
         }
-        debug("Parsed RESP values: %s", values);
         return values;
     }
 

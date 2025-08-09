@@ -31,9 +31,9 @@ public class MainEventLoop implements AutoCloseable {
     private final RedisConfig config;
     private final Cache cache;
     private final EventReplicationService replicationService;
-    private volatile PendingWait pendingWait;
+    private PendingWait pendingWait;
     private String lastCommand;
-    private Map<RespValue, Queue<PendingWait>> blPopWaiters;
+    private final Map<RespValue, Queue<PendingWait>> blPopWaiters;
 
     public MainEventLoop(RedisConfig redisConfig, Cache cache) throws IOException {
         selector = Selector.open();
@@ -57,33 +57,37 @@ public class MainEventLoop implements AutoCloseable {
 
     private void runLoop() throws IOException {
         while (!Thread.currentThread().isInterrupted()) {
-            selector.select(100);
+            selector.select(10);
             checkWaitClients();
             checkBlPopWaiters();
             Set<SelectionKey> keys = selector.selectedKeys();
-            for (SelectionKey key : keys) {
+            handleKeys(keys);
+            keys.clear();
+        }
+    }
+
+    private void handleKeys(Set<SelectionKey> keys) {
+        for (SelectionKey key : keys) {
+            try {
+                if (key.isAcceptable()) {
+                    handleAccept(key);
+                } else if (key.isReadable()) {
+                    handleRead(key);
+                } else if (key.isWritable()) {
+                    handleWrite(key);
+                }
+            } catch (Exception e) {
+                error("Error handling key %s: %s", key, e);
+                key.cancel();
                 try {
-                    if (key.isAcceptable()) {
-                        handleAccept(key);
-                    } else if (key.isReadable()) {
-                        handleRead(key);
-                    } else if (key.isWritable()) {
-                        handleWrite(key);
+                    if (key.channel() instanceof SocketChannel client) {
+                        key.channel().close();
+                        servingClients.remove(client);
                     }
-                } catch (Exception e) {
-                    error("Error handling key %s: %s", key, e);
-                    key.cancel();
-                    try {
-                        if (key.channel() instanceof SocketChannel client) {
-                            key.channel().close();
-                            servingClients.remove(client);
-                        }
-                    } catch (IOException closeException) {
-                        error("Error closing channel %s: %s", key.channel(), closeException);
-                    }
+                } catch (IOException closeException) {
+                    error("Error closing channel %s: %s", key.channel(), closeException);
                 }
             }
-            keys.clear();
         }
     }
 
@@ -99,43 +103,51 @@ public class MainEventLoop implements AutoCloseable {
         }
     }
 
-    private boolean checkWaitClients() {
-        if (pendingWait != null && !pendingWait.handled
+    private void checkWaitClients() {
+        if (pendingWait != null
             && (pendingWait.receivedAcks >= pendingWait.requiredAcks || System.currentTimeMillis() >= pendingWait.expiration)) {
             sendResponse(pendingWait.state, new RespInteger(pendingWait.receivedAcks).serialize());
             pendingWait = null;
-            return true;
         }
-
-        return false;
     }
 
-    private boolean checkBlPopWaiters() {
-        var blPopIterator = blPopWaiters.entrySet().iterator();
-        while (blPopIterator.hasNext()) {
-            var entry = blPopIterator.next();
-            CachedValue<RespValue> cachedValue = cache.get(entry.getKey());
-            if (cachedValue.value() instanceof RespArray array) {
-                PendingWait firstWaiter = entry.getValue().poll();
+    private void checkBlPopWaiters() {
+        Set<RespValue> keys = new HashSet<>(blPopWaiters.keySet());
+        keys.forEach(this::checkBlPopWaiters);
+    }
 
-                debug("first waiter: %s", firstWaiter);
-                debug("all waiters: %s", entry.getValue());
-                if (array.values().size() == 1) {
-                    cache.remove(entry.getKey());
-                    sendResponse(firstWaiter.state, new RespArray(List.of(entry.getKey(), array.values().getFirst())).serialize());
+    private boolean checkBlPopWaiters(RespValue key) {
+        Queue<PendingWait> waiters = blPopWaiters.get(key);
+        if (waiters != null) {
+                PendingWait firstWaiter = waiters.peek();
+                long currentTime = System.currentTimeMillis();
+                if (firstWaiter.expiration != -1 && currentTime >= firstWaiter.expiration) {
+                    sendResponse(firstWaiter.state, new RespBulkString(null).serialize());
+                    if (waiters.size() == 1) {
+                        blPopWaiters.remove(key);
+                    } else {
+                        waiters.poll();
+                    }
+                    return true;
                 } else {
-                    sendResponse(firstWaiter.state, new RespArray(List.of(entry.getKey(), array.values().removeFirst())).serialize());
+                    CachedValue<RespValue> cachedValue = cache.get(key);
+                    if (cachedValue.value() instanceof RespArray array) {
+                        firstWaiter = waiters.poll();
+                        if (array.values().size() == 1) {
+                            cache.remove(key);
+                            sendResponse(firstWaiter.state, new RespArray(List.of(key, array.values().getFirst())).serialize());
+                        } else {
+                            sendResponse(firstWaiter.state, new RespArray(List.of(key, array.values().removeFirst())).serialize());
+                        }
+                        while (!waiters.isEmpty()) {
+                            PendingWait waiter = waiters.poll();
+                            waiter.state.pendingForAcks = false;
+                        }
+                        cache.remove(key);
+                        blPopWaiters.remove(key);
+                        return true;
+                    }
                 }
-                while (!entry.getValue().isEmpty()) {
-                    PendingWait waiter = entry.getValue().poll();
-                    waiter.state.pendingForAcks = false;
-                    sendResponse(waiter.state, new RespBulkString(null).serialize());
-                }
-                cache.remove(entry.getKey());
-                blPopIterator.remove();
-
-                return true;
-            }
         }
 
         return false;
@@ -176,7 +188,7 @@ public class MainEventLoop implements AutoCloseable {
                     case "PING" -> ping(state);
                     case "ECHO" -> echo(state, values);
                     case "SET" -> set(values, state, array);
-                    case "GET" -> get(key, values, state);
+                    case "GET" -> get(values, state);
                     case "CONFIG" -> configGet(values, state);
                     case "KEYS" -> keys(state);
                     case "INFO" -> info(state);
@@ -204,15 +216,18 @@ public class MainEventLoop implements AutoCloseable {
         RespValue key = values.get(1);
         CachedValue<RespValue> cachedValue = cache.get(key);
         if (!(cachedValue.value() instanceof RespArray cachedArray)) {
-            PendingWait blPopWaiter = new PendingWait(state, 0, 0);
+            long expiration = -1;
+            if (values.size() > 2) {
+                String value = ((RespBulkString) values.get(2)).value();
+                if (!"0".equalsIgnoreCase(value)) {
+                    expiration = System.currentTimeMillis() + (long) (Double.parseDouble(value) * 1000);
+                }
+            }
+            PendingWait blPopWaiter = new PendingWait(state, 0, expiration);
             state.pendingForAcks = true;
-            Queue<PendingWait> pendingWaits = blPopWaiters.get(key);
-            debug("before: %s", pendingWaits);
             blPopWaiters.computeIfAbsent(key, k -> new LinkedList<>()).offer(blPopWaiter);
-            pendingWaits = blPopWaiters.get(key);
-            debug("after: %s", pendingWaits);
         } else {
-            boolean unblocked = checkBlPopWaiters();
+            boolean unblocked = checkBlPopWaiters(key);
             if (!unblocked) {
                 List<RespValue> list = cachedArray.values();
                 if (list.size() == 1) {
@@ -429,12 +444,9 @@ public class MainEventLoop implements AutoCloseable {
         sendResponse(state, response.serialize());
     }
 
-    private void get(SelectionKey key, List<RespValue> values, ClientState state) {
-        debug("cache content: %s", cache);
+    private void get(List<RespValue> values, ClientState state) {
         RespBulkString getKey = ((RespBulkString) values.get(1));
         CachedValue<RespValue> cachedValue = cache.get(getKey);
-        debug("GET command received for key '%s', returning value: %s", key, cachedValue);
-        debug("Returning value for key '%s': %s", key, new String(cachedValue.getValue().serialize()));
         sendResponse(state, cachedValue.getValue().serialize());
     }
 
@@ -497,7 +509,6 @@ public class MainEventLoop implements AutoCloseable {
     private void sendResponse(ClientState client, byte[] data) {
         client.pendingWrites.add(ByteBuffer.wrap(data));
         client.key.interestOps(SelectionKey.OP_WRITE);
-        debug("suggested write for client %s: %s", client.key, new String(data));
     }
 
     @Override
@@ -512,7 +523,7 @@ public class MainEventLoop implements AutoCloseable {
     public static class ClientState {
         final Queue<ByteBuffer> pendingWrites = new ArrayDeque<>();
         final SelectionKey key;
-        public volatile boolean pendingForAcks = false;
+        boolean pendingForAcks = false;
 
         public ClientState(SelectionKey key) {
             this.key = key;
@@ -534,7 +545,6 @@ public class MainEventLoop implements AutoCloseable {
 
     public static class PendingWait {
         final ClientState state;
-        public boolean handled;
         int receivedAcks;
         final int requiredAcks;
         final long expiration;
@@ -543,7 +553,6 @@ public class MainEventLoop implements AutoCloseable {
             this.state = state;
             this.requiredAcks = requiredAcks;
             this.receivedAcks = 0;
-            this.handled = false;
             this.expiration = expiration;
         }
 
@@ -551,7 +560,6 @@ public class MainEventLoop implements AutoCloseable {
         public String toString() {
             return "PendingWait{" +
                    "state=" + state +
-                   ", handled=" + handled +
                    ", receivedAcks=" + receivedAcks +
                    ", requiredAcks=" + requiredAcks +
                    ", expiration=" + expiration +
