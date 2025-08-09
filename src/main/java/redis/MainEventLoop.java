@@ -201,6 +201,7 @@ public class MainEventLoop implements AutoCloseable {
                     case "LLEN" -> lLen(values, state);
                     case "LPOP" -> lPop(values, state, array);
                     case "BLPOP" -> blPop(values, state, array);
+                    case "TYPE" -> type(values, state);
                     default -> sendResponse(state, "-ERR unknown command\r\n".getBytes());
                 }
                 lastCommand = command;
@@ -209,6 +210,20 @@ public class MainEventLoop implements AutoCloseable {
 
         if (!state.pendingForAcks) {
             key.interestOps(SelectionKey.OP_WRITE);
+        }
+    }
+
+    private void type(List<RespValue> values, ClientState state) {
+        RespBulkString key = (RespBulkString) values.get(1);
+        CachedValue<RespValue> cachedValue = cache.get(key);
+        if (cachedValue.value() instanceof RespArray) {
+            sendResponse(state, new RespSimpleString("list").serialize());
+        } else if (cachedValue.value() instanceof RespBulkString) {
+            sendResponse(state, new RespSimpleString("string").serialize());
+        } else if (cachedValue.value() instanceof RespSet) {
+            sendResponse(state, new RespSimpleString("set").serialize());
+        } else {
+            sendResponse(state, new RespSimpleString("none").serialize());
         }
     }
 
