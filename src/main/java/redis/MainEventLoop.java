@@ -218,12 +218,14 @@ public class MainEventLoop implements AutoCloseable {
         CachedValue<RespValue> cachedValue = cache.get(key);
         if (cachedValue.value() instanceof RespArray) {
             sendResponse(state, new RespSimpleString("list").serialize());
-        } else if (cachedValue.value() instanceof RespBulkString) {
-            sendResponse(state, new RespSimpleString("string").serialize());
+        } else if (cachedValue.value() instanceof RespBulkString bulkString) {
+            if (bulkString.value() == null) {
+                sendResponse(state, new RespSimpleString("none").serialize());
+            } else {
+                sendResponse(state, new RespSimpleString("string").serialize());
+            }
         } else if (cachedValue.value() instanceof RespSet) {
             sendResponse(state, new RespSimpleString("set").serialize());
-        } else {
-            sendResponse(state, new RespSimpleString("none").serialize());
         }
     }
 
