@@ -5,8 +5,7 @@ import redis.resp.RespError;
 import redis.resp.RespInteger;
 import redis.resp.RespValue;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 public class RedisStream {
     private static final RespError KEY_VALIDATION_ERROR
@@ -34,7 +33,7 @@ public class RedisStream {
         if (timePart == -1) {
             timePart = Long.parseLong(rawIds[0]);
         }
-        if (!"*".equalsIgnoreCase(rawIds[1])) {
+        if (rawIds.length != 1 && !"*".equalsIgnoreCase(rawIds[1])) {
             sequenceNumber = Long.parseLong(rawIds[1]);
         }
         if (timePart == 0 && sequenceNumber == 0) {
@@ -43,7 +42,7 @@ public class RedisStream {
         if (minEntryId == -1) {
             minEntryId = timePart;
             maxEntryId = timePart;
-        } else if (maxEntryId > minEntryId) {
+        } else if (maxEntryId > timePart) {
             return KEY_VALIDATION_ERROR;
         } else {
             maxEntryId = timePart;
@@ -61,14 +60,13 @@ public class RedisStream {
 
         public RespValue insert(long timePart, long sequenceNumber, List<RespValue> values) {
             TrieNode node = root;
-            long iterator = timePart;
-            while (iterator > 0) {
-                int digit = (int) (iterator % 10);
+            Deque<Integer> digits = getDigits(timePart);
+            while (!digits.isEmpty()) {
+                int digit = digits.pollLast();
                 if (!node.contains(digit)) {
                     node.put(digit);
                 }
                 node = node.get(digit);
-                iterator /= 10;
             }
             RespValue key = node.appendValue(timePart, sequenceNumber, values);
             if (key instanceof RespInteger intKey) {
@@ -76,6 +74,15 @@ public class RedisStream {
             }
 
             return KEY_VALIDATION_ERROR;
+        }
+
+        private Deque<Integer> getDigits(long number) {
+            Deque<Integer> digits = new LinkedList<>();
+            while (number > 0) {
+                digits.push((int) (number % 10));
+                number /= 10;
+            }
+            return digits;
         }
     }
 
