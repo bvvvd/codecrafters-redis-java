@@ -20,7 +20,7 @@ public final class RespError extends AbstractRespValue {
         byte[] valueBytes = value.getBytes();
 
         byte[] serialized = new byte[valueBytes.length + 3];
-        serialized[0] = '+';
+        serialized[0] = '-';
         System.arraycopy(valueBytes, 0, serialized, 1, valueBytes.length);
         serialized[serialized.length - 2] = '\r';
         serialized[serialized.length - 1] = '\n';

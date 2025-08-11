@@ -18,7 +18,7 @@ public class StreamCache {
         return streams.containsKey(key);
     }
 
-    public RespBulkString add(RespValue key, RespBulkString entryId, List<RespValue> streamValues) {
+    public RespValue add(RespValue key, RespBulkString entryId, List<RespValue> streamValues) {
         if (!containsKey(key)) {
             streams.put(key, new RedisStream());
         }

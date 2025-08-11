@@ -1,6 +1,8 @@
 package redis.cache;
 
 import redis.resp.RespBulkString;
+import redis.resp.RespError;
+import redis.resp.RespInteger;
 import redis.resp.RespValue;
 
 import java.util.ArrayList;
@@ -9,6 +11,10 @@ import java.util.List;
 import java.util.Map;
 
 public class RedisStream {
+    private static final RespError KEY_VALIDATION_ERROR
+            = new RespError("ERR The ID specified in XADD is equal or smaller than the target stream top item");
+    private static final RespError ZERO_KEY_VALIDATION_ERROR
+            = new RespError("ERR The ID specified in XADD must be greater than 0-0");
     private final Trie trie;
     private String minEntryId;
     private String maxEntryId;
@@ -17,13 +23,16 @@ public class RedisStream {
         this.trie = new Trie();
     }
 
-    public RespBulkString append(RespBulkString entryId, List<RespValue> values) {
+    public RespValue append(RespBulkString entryId, List<RespValue> values) {
         String[] id = entryId.value().split("-");
+        if (Long.parseLong(id[0]) == 0 && Long.parseLong(id[1]) == 0) {
+            return ZERO_KEY_VALIDATION_ERROR;
+        }
         if (minEntryId == null) {
             minEntryId = id[0];
             maxEntryId = id[0];
         } else if (maxEntryId.compareTo(id[0]) > 0) {
-            id[0] = Long.toString(Long.parseLong(id[0]));
+            return KEY_VALIDATION_ERROR;
         } else {
             maxEntryId = id[0];
         }
@@ -38,7 +47,7 @@ public class RedisStream {
             this.root = new TrieNode();
         }
 
-        public RespBulkString insert(String[] id, List<RespValue> values) {
+        public RespValue insert(String[] id, List<RespValue> values) {
             TrieNode node = root;
             for (char c: id[0].toCharArray()) {
                 if (!node.contains(c)) {
@@ -47,7 +56,12 @@ public class RedisStream {
                 node = node.get(c);
             }
 
-            return new RespBulkString(id[0] + "-" + node.appendValue(id[1], values));
+            RespValue key = node.appendValue(id[1], values);
+            if (key instanceof RespInteger intKey) {
+                return new RespBulkString(id[0] + "-" + intKey.value());
+            }
+
+            return KEY_VALIDATION_ERROR;
         }
     }
 
@@ -74,16 +88,20 @@ public class RedisStream {
             return children.get(c);
         }
 
-        public int appendValue(String id, List<RespValue> values) {
+        public RespValue appendValue(String id, List<RespValue> values) {
             int entryId = Integer.parseInt(id);
+            if (!ids.isEmpty() && entryId <= ids.getLast()) {
+                return KEY_VALIDATION_ERROR;
+            }
+
             entries.add(values);
             if (ids.isEmpty() || entryId > ids.getLast()) {
                 ids.add(entryId);
-                return entryId;
+                return new RespInteger(entryId);
             }
 
             ids.add(ids.getLast() + 1);
-            return ids.getLast();
+            return new RespInteger(ids.getLast());
         }
     }
 }
