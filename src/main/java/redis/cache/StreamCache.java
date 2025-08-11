@@ -1,0 +1,27 @@
+package redis.cache;
+
+import redis.resp.RespBulkString;
+import redis.resp.RespValue;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+public class StreamCache {
+    private final Map<RespValue, RedisStream> streams;
+
+    public StreamCache() {
+        streams = new HashMap<>();
+    }
+
+    public boolean containsKey(RespValue key) {
+        return streams.containsKey(key);
+    }
+
+    public RespBulkString add(RespValue key, RespBulkString entryId, List<RespValue> streamValues) {
+        if (!containsKey(key)) {
+            streams.put(key, new RedisStream());
+        }
+        return streams.get(key).append(entryId, streamValues);
+    }
+}

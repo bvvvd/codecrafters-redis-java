@@ -1,5 +1,6 @@
 import redis.MainEventLoop;
 import redis.cache.Cache;
+import redis.cache.StreamCache;
 import redis.config.RedisConfig;
 import redis.persistence.DumpFileReader;
 
@@ -10,7 +11,8 @@ public class Main {
         RedisConfig config = new RedisConfig(args);
         DumpFileReader dumpFileReader = new DumpFileReader(config);
         Cache cache = new Cache(dumpFileReader);
-        try (MainEventLoop loop = new MainEventLoop(config, cache)) {
+        StreamCache streams = new StreamCache();
+        try (MainEventLoop loop = new MainEventLoop(config, cache, streams)) {
             loop.serve();
         } catch (Exception e) {
             error("Failed to start EventLoop: %s%n", e.getMessage());

@@ -2,6 +2,7 @@ package redis;
 
 import redis.cache.Cache;
 import redis.cache.CachedValue;
+import redis.cache.StreamCache;
 import redis.config.RedisConfig;
 import redis.exception.RedisException;
 import redis.replication.EventReplicationService;
@@ -30,12 +31,13 @@ public class MainEventLoop implements AutoCloseable {
     private final Parser parser;
     private final RedisConfig config;
     private final Cache cache;
+    private final StreamCache streams;
     private final EventReplicationService replicationService;
     private PendingWait pendingWait;
     private String lastCommand;
     private final Map<RespValue, Queue<PendingWait>> blPopWaiters;
 
-    public MainEventLoop(RedisConfig redisConfig, Cache cache) throws IOException {
+    public MainEventLoop(RedisConfig redisConfig, Cache cache, StreamCache streams) throws IOException {
         selector = Selector.open();
         serverChannel = ServerSocketChannel.open();
         serverChannel.configureBlocking(false);
@@ -46,6 +48,7 @@ public class MainEventLoop implements AutoCloseable {
         parser = new Parser();
         config = redisConfig;
         this.cache = cache;
+        this.streams = streams;
         replicationService = new EventReplicationService(redisConfig, parser, 0L);
         blPopWaiters = new HashMap<>();
     }
@@ -202,6 +205,7 @@ public class MainEventLoop implements AutoCloseable {
                     case "LPOP" -> lPop(values, state, array);
                     case "BLPOP" -> blPop(values, state, array);
                     case "TYPE" -> type(values, state);
+                    case "XADD" -> xAdd(values, state);
                     default -> sendResponse(state, "-ERR unknown command\r\n".getBytes());
                 }
                 lastCommand = command;
@@ -213,6 +217,13 @@ public class MainEventLoop implements AutoCloseable {
         }
     }
 
+    private void xAdd(List<RespValue> values, ClientState state) {
+        RespValue key = values.get(1);
+        RespBulkString entryId = ((RespBulkString) values.get(2));
+        List<RespValue> streamValues = values.subList(3, values.size());
+        sendResponse(state, streams.add(key, entryId, streamValues).serialize());
+    }
+
     private void type(List<RespValue> values, ClientState state) {
         RespBulkString key = (RespBulkString) values.get(1);
         CachedValue<RespValue> cachedValue = cache.get(key);
@@ -220,7 +231,11 @@ public class MainEventLoop implements AutoCloseable {
             sendResponse(state, new RespSimpleString("list").serialize());
         } else if (cachedValue.value() instanceof RespBulkString bulkString) {
             if (bulkString.value() == null) {
-                sendResponse(state, new RespSimpleString("none").serialize());
+                if (streams.containsKey(key)) {
+                    sendResponse(state, new RespSimpleString("stream").serialize());
+                } else {
+                    sendResponse(state, new RespSimpleString("none").serialize());
+                }
             } else {
                 sendResponse(state, new RespSimpleString("string").serialize());
             }
