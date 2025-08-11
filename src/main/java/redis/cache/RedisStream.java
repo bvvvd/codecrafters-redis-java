@@ -25,7 +25,7 @@ public class RedisStream {
 
     public RespValue append(RespBulkString entryId, List<RespValue> values) {
         String[] id = entryId.value().split("-");
-        if (Long.parseLong(id[0]) == 0 && Long.parseLong(id[1]) == 0) {
+        if (Long.parseLong(id[0]) == 0 && !"*".equalsIgnoreCase(id[1]) && Long.parseLong(id[1]) == 0) {
             return ZERO_KEY_VALIDATION_ERROR;
         }
         if (minEntryId == null) {
@@ -40,7 +40,7 @@ public class RedisStream {
         return trie.insert(id, values);
     }
 
-    private class Trie {
+    private static class Trie {
         private final TrieNode root;
 
         private Trie() {
@@ -56,7 +56,7 @@ public class RedisStream {
                 node = node.get(c);
             }
 
-            RespValue key = node.appendValue(id[1], values);
+            RespValue key = node.appendValue(id, values);
             if (key instanceof RespInteger intKey) {
                 return new RespBulkString(id[0] + "-" + intKey.value());
             }
@@ -65,7 +65,7 @@ public class RedisStream {
         }
     }
 
-    private class TrieNode {
+    private static class TrieNode {
         private final Map<Character, TrieNode> children;
         private final List<List<RespValue>> entries;
         private final List<Integer> ids;
@@ -88,8 +88,21 @@ public class RedisStream {
             return children.get(c);
         }
 
-        public RespValue appendValue(String id, List<RespValue> values) {
-            int entryId = Integer.parseInt(id);
+        public RespValue appendValue(String[] id, List<RespValue> values) {
+            int entryId;
+            if ("*".equalsIgnoreCase(id[1])) {
+                if (ids.isEmpty()) {
+                    if ("0".equalsIgnoreCase(id[0])) {
+                        entryId = 1;
+                    } else {
+                        entryId = 0;
+                    }
+                } else {
+                    entryId = ids.getLast() + 1;
+                }
+            } else {
+                entryId = Integer.parseInt(id[1]);
+            }
             if (!ids.isEmpty() && entryId <= ids.getLast()) {
                 return KEY_VALIDATION_ERROR;
             }
@@ -100,7 +113,7 @@ public class RedisStream {
                 return new RespInteger(entryId);
             }
 
-            ids.add(ids.getLast() + 1);
+            ids.add(entryId);
             return new RespInteger(ids.getLast());
         }
     }
