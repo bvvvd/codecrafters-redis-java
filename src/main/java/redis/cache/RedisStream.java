@@ -6,9 +6,7 @@ import redis.resp.RespInteger;
 import redis.resp.RespValue;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class RedisStream {
     private static final RespError KEY_VALIDATION_ERROR
@@ -16,28 +14,42 @@ public class RedisStream {
     private static final RespError ZERO_KEY_VALIDATION_ERROR
             = new RespError("ERR The ID specified in XADD must be greater than 0-0");
     private final Trie trie;
-    private String minEntryId;
-    private String maxEntryId;
+    private long minEntryId;
+    private long maxEntryId;
 
     public RedisStream() {
-        this.trie = new Trie();
+        trie = new Trie();
+        minEntryId = -1;
+        maxEntryId = -1;
     }
 
     public RespValue append(RespBulkString entryId, List<RespValue> values) {
-        String[] id = entryId.value().split("-");
-        if (Long.parseLong(id[0]) == 0 && !"*".equalsIgnoreCase(id[1]) && Long.parseLong(id[1]) == 0) {
+        String value = entryId.value();
+        long timePart = -1;
+        long sequenceNumber = -1;
+        if ("*".equalsIgnoreCase(value)) {
+            timePart = System.currentTimeMillis();
+        }
+        String[] rawIds = value.split("-");
+        if (timePart == -1) {
+            timePart = Long.parseLong(rawIds[0]);
+        }
+        if (!"*".equalsIgnoreCase(rawIds[1])) {
+            sequenceNumber = Long.parseLong(rawIds[1]);
+        }
+        if (timePart == 0 && sequenceNumber == 0) {
             return ZERO_KEY_VALIDATION_ERROR;
         }
-        if (minEntryId == null) {
-            minEntryId = id[0];
-            maxEntryId = id[0];
-        } else if (maxEntryId.compareTo(id[0]) > 0) {
+        if (minEntryId == -1) {
+            minEntryId = timePart;
+            maxEntryId = timePart;
+        } else if (maxEntryId > minEntryId) {
             return KEY_VALIDATION_ERROR;
         } else {
-            maxEntryId = id[0];
+            maxEntryId = timePart;
         }
 
-        return trie.insert(id, values);
+        return trie.insert(timePart, sequenceNumber, values);
     }
 
     private static class Trie {
@@ -47,18 +59,20 @@ public class RedisStream {
             this.root = new TrieNode();
         }
 
-        public RespValue insert(String[] id, List<RespValue> values) {
+        public RespValue insert(long timePart, long sequenceNumber, List<RespValue> values) {
             TrieNode node = root;
-            for (char c: id[0].toCharArray()) {
-                if (!node.contains(c)) {
-                    node.put(c);
+            long iterator = timePart;
+            while (iterator > 0) {
+                int digit = (int) (iterator % 10);
+                if (!node.contains(digit)) {
+                    node.put(digit);
                 }
-                node = node.get(c);
+                node = node.get(digit);
+                iterator /= 10;
             }
-
-            RespValue key = node.appendValue(id, values);
+            RespValue key = node.appendValue(timePart, sequenceNumber, values);
             if (key instanceof RespInteger intKey) {
-                return new RespBulkString(id[0] + "-" + intKey.value());
+                return new RespBulkString(timePart + "-" + intKey.value());
             }
 
             return KEY_VALIDATION_ERROR;
@@ -66,33 +80,48 @@ public class RedisStream {
     }
 
     private static class TrieNode {
-        private final Map<Character, TrieNode> children;
+        private final TrieNode[] children;
         private final List<List<RespValue>> entries;
-        private final List<Integer> ids;
+        private final List<Long> ids;
 
         private TrieNode() {
-            this.children = new HashMap<>();
+            this.children = new TrieNode[10];
             this.entries = new ArrayList<>();
             this.ids = new ArrayList<>();
         }
 
-        public boolean contains(char c) {
-            return children.containsKey(c);
+        public boolean contains(int digit) {
+            return children[digit] != null;
         }
 
-        public void put(char c) {
-            children.put(c, new TrieNode());
+        public void put(int digit) {
+            children[digit] = new TrieNode();
         }
 
-        public TrieNode get(char c) {
-            return children.get(c);
+        public TrieNode get(int digit) {
+            return children[digit];
+        }
+        public RespValue appendValue(long timePart, long predefinedSequenceNumber, List<RespValue> values) {
+            long sequenceNumber = getSequenceNumber(timePart, predefinedSequenceNumber);
+            if (!ids.isEmpty() && sequenceNumber <= ids.getLast()) {
+                return KEY_VALIDATION_ERROR;
+            }
+
+            entries.add(values);
+            if (ids.isEmpty() || sequenceNumber > ids.getLast()) {
+                ids.add(sequenceNumber);
+                return new RespInteger(sequenceNumber);
+            }
+
+            ids.add(sequenceNumber);
+            return new RespInteger(ids.getLast());
         }
 
-        public RespValue appendValue(String[] id, List<RespValue> values) {
-            int entryId;
-            if ("*".equalsIgnoreCase(id[1])) {
+        private long getSequenceNumber(long timePart, long predefinedSequenceNumber) {
+            long entryId;
+            if (predefinedSequenceNumber == -1) {
                 if (ids.isEmpty()) {
-                    if ("0".equalsIgnoreCase(id[0])) {
+                    if (timePart == 0) {
                         entryId = 1;
                     } else {
                         entryId = 0;
@@ -101,20 +130,9 @@ public class RedisStream {
                     entryId = ids.getLast() + 1;
                 }
             } else {
-                entryId = Integer.parseInt(id[1]);
+                entryId = predefinedSequenceNumber;
             }
-            if (!ids.isEmpty() && entryId <= ids.getLast()) {
-                return KEY_VALIDATION_ERROR;
-            }
-
-            entries.add(values);
-            if (ids.isEmpty() || entryId > ids.getLast()) {
-                ids.add(entryId);
-                return new RespInteger(entryId);
-            }
-
-            ids.add(entryId);
-            return new RespInteger(ids.getLast());
+            return entryId;
         }
     }
 }
