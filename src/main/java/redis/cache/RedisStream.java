@@ -7,10 +7,7 @@ import redis.resp.RespValue;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.SortedMap;
 import java.util.TreeMap;
-
-import static redis.util.Logger.debug;
 
 public class RedisStream {
     private static final RespError KEY_VALIDATION_ERROR
@@ -85,7 +82,7 @@ public class RedisStream {
     }
 
     private long[] getStart(String left) {
-        if (left == null) {
+        if (left == null || "-".equalsIgnoreCase(left)) {
             return new long[]{minEntryId, -1};
         }
         String[] split = left.split("-");
@@ -97,7 +94,7 @@ public class RedisStream {
     }
 
     private long[] getEnd(String right) {
-        if (right == null) {
+        if (right == null || "+".equalsIgnoreCase(right)) {
             return new long[]{maxEntryId, -1};
         }
         String[] split = right.split("-");
