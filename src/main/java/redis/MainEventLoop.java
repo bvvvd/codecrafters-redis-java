@@ -207,6 +207,7 @@ public class MainEventLoop implements AutoCloseable {
                     case "TYPE" -> type(values, state);
                     case "XADD" -> xAdd(values, state);
                     case "XRANGE" -> xRange(values, state);
+                    case "XREAD" -> xRead(values, state);
                     default -> sendResponse(state, "-ERR unknown command\r\n".getBytes());
                 }
                 lastCommand = command;
@@ -216,6 +217,13 @@ public class MainEventLoop implements AutoCloseable {
         if (!state.pendingForAcks) {
             key.interestOps(SelectionKey.OP_WRITE);
         }
+    }
+
+    private void xRead(List<RespValue> values, ClientState state) {
+        RespValue key = values.get(2);
+        String start = ((RespBulkString) values.get(3)).value();
+
+        sendResponse(state, streams.xRead(List.of(key), start).serialize());
     }
 
     private void xRange(List<RespValue> values, ClientState state) {

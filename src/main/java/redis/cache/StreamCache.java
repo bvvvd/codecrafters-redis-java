@@ -4,6 +4,7 @@ import redis.resp.RespArray;
 import redis.resp.RespBulkString;
 import redis.resp.RespValue;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,5 +33,18 @@ public class StreamCache {
             return new RespArray(List.of());
         }
         return stream.range(start, end);
+    }
+
+    public RespValue xRead(List<RespValue> keys, String start) {
+        List<RespValue> output = new ArrayList<>();
+        for (RespValue key : keys) {
+            RedisStream stream = streams.get(key);
+
+            output.add(new RespArray(List.of(key, (
+                    stream == null
+                            ? new RespArray(List.of())
+                            : stream.read(start)))));
+        }
+        return new RespArray(output);
     }
 }

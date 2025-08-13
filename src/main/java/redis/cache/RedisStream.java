@@ -105,6 +105,26 @@ public class RedisStream {
         return new long[]{Math.min(maxEntryId, Long.parseLong(split[0])), Long.parseLong(split[1])};
     }
 
+    public RespValue read(String left) {
+        long[] start = getStart(left);
+        List<RespValue> rangeValues = new ArrayList<>();
+        streamStorage.tailMap(start[0], true)
+                .forEach((timePart, node) -> {
+                    long from = node.values.firstKey();
+                    if (timePart == start[0]) {
+                        from = start[1];
+                    }
+                    node.values.tailMap(from, false)
+                            .forEach((key, value)
+                                    -> rangeValues.add(
+                                    new RespArray(
+                                            List.of(
+                                                    new RespBulkString(timePart + "-" + key),
+                                                    new RespArray(value)))));
+                });
+        return new RespArray(rangeValues);
+    }
+
     private class StreamNode {
         TreeMap<Long, List<RespValue>> values = new TreeMap<>();
 
