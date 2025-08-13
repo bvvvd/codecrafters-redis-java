@@ -66,7 +66,7 @@ public class RedisStream {
                     if (timePart == start[0]) {
                         from = start[1];
                     }
-                    if (timePart == end[0]) {
+                    if (timePart == end[0] && end[1] != -1) {
                         to = end[1];
                     }
 
