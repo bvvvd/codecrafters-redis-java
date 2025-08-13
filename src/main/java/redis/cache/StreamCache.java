@@ -35,9 +35,11 @@ public class StreamCache {
         return stream.range(start, end);
     }
 
-    public RespValue xRead(List<RespValue> keys, String start) {
+    public RespValue xRead(List<RespValue> keys) {
         List<RespValue> output = new ArrayList<>();
-        for (RespValue key : keys) {
+        for (int i = 0; i < keys.size() / 2; i++) {
+            RespValue key = keys.get(i);
+            String start = ((RespBulkString) keys.get(i + keys.size() / 2)).value();
             RedisStream stream = streams.get(key);
 
             output.add(new RespArray(List.of(key, (

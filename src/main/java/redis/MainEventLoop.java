@@ -220,10 +220,9 @@ public class MainEventLoop implements AutoCloseable {
     }
 
     private void xRead(List<RespValue> values, ClientState state) {
-        RespValue key = values.get(2);
-        String start = ((RespBulkString) values.get(3)).value();
+        List<RespValue> keys = values.subList(2, values.size());
 
-        sendResponse(state, streams.xRead(List.of(key), start).serialize());
+        sendResponse(state, streams.xRead(keys).serialize());
     }
 
     private void xRange(List<RespValue> values, ClientState state) {
