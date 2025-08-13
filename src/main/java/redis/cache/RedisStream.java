@@ -1,23 +1,28 @@
 package redis.cache;
 
+import redis.resp.RespArray;
 import redis.resp.RespBulkString;
 import redis.resp.RespError;
-import redis.resp.RespInteger;
 import redis.resp.RespValue;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.SortedMap;
+import java.util.TreeMap;
+
+import static redis.util.Logger.debug;
 
 public class RedisStream {
     private static final RespError KEY_VALIDATION_ERROR
             = new RespError("ERR The ID specified in XADD is equal or smaller than the target stream top item");
     private static final RespError ZERO_KEY_VALIDATION_ERROR
             = new RespError("ERR The ID specified in XADD must be greater than 0-0");
-    private final Trie trie;
+    private final TreeMap<Long, StreamNode> streamStorage;
     private long minEntryId;
     private long maxEntryId;
 
     public RedisStream() {
-        trie = new Trie();
+        streamStorage = new TreeMap<>();
         minEntryId = -1;
         maxEntryId = -1;
     }
@@ -48,93 +53,85 @@ public class RedisStream {
             maxEntryId = timePart;
         }
 
-        return trie.insert(timePart, sequenceNumber, values);
+        return streamStorage.computeIfAbsent(timePart, k -> new StreamNode())
+                .append(timePart, sequenceNumber, values);
     }
 
-    private static class Trie {
-        private final TrieNode root;
+    public RespValue range(String left, String right) {
+        long[] start = getStart(left);
+        long[] end = getEnd(right);
 
-        private Trie() {
-            this.root = new TrieNode();
-        }
+        List<RespValue> rangeValues = new ArrayList<>();
+        streamStorage.subMap(start[0], true, end[0], true)
+                .forEach((timePart, node) -> {
+                    long from = node.values.firstKey();
+                    long to = node.values.lastKey();
+                    if (timePart == start[0]) {
+                        from = start[1];
+                    }
+                    if (timePart == end[0]) {
+                        to = end[1];
+                    }
 
-        public RespValue insert(long timePart, long sequenceNumber, List<RespValue> values) {
-            TrieNode node = root;
-            Deque<Integer> digits = getDigits(timePart);
-            while (!digits.isEmpty()) {
-                int digit = digits.pollLast();
-                if (!node.contains(digit)) {
-                    node.put(digit);
-                }
-                node = node.get(digit);
-            }
-            RespValue key = node.appendValue(timePart, sequenceNumber, values);
-            if (key instanceof RespInteger intKey) {
-                return new RespBulkString(timePart + "-" + intKey.value());
-            }
-
-            return KEY_VALIDATION_ERROR;
-        }
-
-        private Deque<Integer> getDigits(long number) {
-            Deque<Integer> digits = new LinkedList<>();
-            while (number > 0) {
-                digits.push((int) (number % 10));
-                number /= 10;
-            }
-            return digits;
-        }
+                    node.values.subMap(from, true, to, true)
+                            .forEach((key, value)
+                                    -> rangeValues.add(
+                                    new RespArray(
+                                            List.of(
+                                                    new RespBulkString(timePart + "-" + key),
+                                                    new RespArray(value)))));
+                });
+        return new RespArray(rangeValues);
     }
 
-    private static class TrieNode {
-        private final TrieNode[] children;
-        private final List<List<RespValue>> entries;
-        private final List<Long> ids;
-
-        private TrieNode() {
-            this.children = new TrieNode[10];
-            this.entries = new ArrayList<>();
-            this.ids = new ArrayList<>();
+    private long[] getStart(String left) {
+        if (left == null) {
+            return new long[]{minEntryId, -1};
+        }
+        String[] split = left.split("-");
+        if (split.length == 1) {
+            return new long[]{Math.max(minEntryId, Long.parseLong(split[0])), -1};
         }
 
-        public boolean contains(int digit) {
-            return children[digit] != null;
+        return new long[]{Math.max(minEntryId, Long.parseLong(split[0])), Long.parseLong(split[1])};
+    }
+
+    private long[] getEnd(String right) {
+        if (right == null) {
+            return new long[]{maxEntryId, -1};
+        }
+        String[] split = right.split("-");
+        if (split.length == 1) {
+            return new long[]{Math.min(maxEntryId, Long.parseLong(split[0])), -1};
         }
 
-        public void put(int digit) {
-            children[digit] = new TrieNode();
-        }
+        return new long[]{Math.min(maxEntryId, Long.parseLong(split[0])), Long.parseLong(split[1])};
+    }
 
-        public TrieNode get(int digit) {
-            return children[digit];
-        }
-        public RespValue appendValue(long timePart, long predefinedSequenceNumber, List<RespValue> values) {
+    private class StreamNode {
+        TreeMap<Long, List<RespValue>> values = new TreeMap<>();
+
+        public RespValue append(long timePart, long predefinedSequenceNumber, List<RespValue> streamValues) {
             long sequenceNumber = getSequenceNumber(timePart, predefinedSequenceNumber);
-            if (!ids.isEmpty() && sequenceNumber <= ids.getLast()) {
+            if (!values.isEmpty() && sequenceNumber <= values.lastKey()) {
                 return KEY_VALIDATION_ERROR;
             }
 
-            entries.add(values);
-            if (ids.isEmpty() || sequenceNumber > ids.getLast()) {
-                ids.add(sequenceNumber);
-                return new RespInteger(sequenceNumber);
-            }
-
-            ids.add(sequenceNumber);
-            return new RespInteger(ids.getLast());
+            values.put(sequenceNumber, streamValues);
+            return new RespBulkString(timePart + "-" + sequenceNumber);
         }
 
         private long getSequenceNumber(long timePart, long predefinedSequenceNumber) {
             long entryId;
             if (predefinedSequenceNumber == -1) {
-                if (ids.isEmpty()) {
+                if (values.isEmpty()) {
                     if (timePart == 0) {
                         entryId = 1;
                     } else {
                         entryId = 0;
                     }
                 } else {
-                    entryId = ids.getLast() + 1;
+                    entryId = values.lastKey() + 1;
                 }
             } else {
                 entryId = predefinedSequenceNumber;

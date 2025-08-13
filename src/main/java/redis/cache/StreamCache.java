@@ -1,5 +1,6 @@
 package redis.cache;
 
+import redis.resp.RespArray;
 import redis.resp.RespBulkString;
 import redis.resp.RespValue;
 
@@ -23,5 +24,13 @@ public class StreamCache {
             streams.put(key, new RedisStream());
         }
         return streams.get(key).append(entryId, streamValues);
+    }
+
+    public RespValue range(RespValue key, String start, String end) {
+        RedisStream stream = streams.get(key);
+        if (stream == null) {
+            return new RespArray(List.of());
+        }
+        return stream.range(start, end);
     }
 }
