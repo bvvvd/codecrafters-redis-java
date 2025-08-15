@@ -164,7 +164,7 @@ public class MainEventLoop implements AutoCloseable {
         while (iterator.hasNext()) {
             var entry = iterator.next();
 
-            if (System.currentTimeMillis() > entry.getValue().expiration) {
+            if (entry.getValue().expiration != -1 && System.currentTimeMillis() > entry.getValue().expiration) {
                 sendResponse(entry.getValue().state, new RespBulkString(null).serialize());
                 iterator.remove();
             } else {
@@ -251,7 +251,7 @@ public class MainEventLoop implements AutoCloseable {
                 sendResponse(state, data.serialize());
             } else {
                 state.pendingForAcks = true;
-                PendingWait xReadWait = new PendingWait(state, -1, System.currentTimeMillis() + timeout);
+                PendingWait xReadWait = new PendingWait(state, -1, timeout == 0 ? -1 : System.currentTimeMillis() + timeout);
                 xReadWaiters.put(keys, xReadWait);
             }
         } else {
