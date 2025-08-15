@@ -125,6 +125,16 @@ public class RedisStream {
         return new RespArray(rangeValues);
     }
 
+    public String getMaxId() {
+        if (streamStorage.isEmpty()) {
+            return "0-0";
+        }
+
+        Long timePart = streamStorage.lastKey();
+        Long sequenceNumber = streamStorage.get(timePart).values.lastKey();
+        return timePart + "-" + sequenceNumber;
+    }
+
     private static class StreamNode {
         TreeMap<Long, List<RespValue>> values = new TreeMap<>();
 

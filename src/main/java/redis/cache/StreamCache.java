@@ -57,7 +57,11 @@ public class StreamCache {
             String start = ((RespBulkString) keys.get(i + keys.size() / 2)).value();
             RedisStream stream = streams.get(key);
 
-            if (stream != null) {
+            if ("$".equalsIgnoreCase(start)) {
+                keys.set(i + keys.size() / 2, stream == null
+                        ? new RespBulkString("0-0")
+                        : new RespBulkString(stream.getMaxId()));
+            } else if (stream != null) {
                 RespArray read = stream.read(start);
                 if (!read.values().isEmpty()) {
                     output.add(new RespArray(List.of(key, read)));
