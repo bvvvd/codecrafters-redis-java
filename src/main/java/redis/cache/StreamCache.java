@@ -49,4 +49,21 @@ public class StreamCache {
         }
         return new RespArray(output);
     }
+
+    public RespArray xReadBlocking(List<RespValue> keys) {
+        List<RespValue> output = new ArrayList<>();
+        for (int i = 0; i < keys.size() / 2; i++) {
+            RespValue key = keys.get(i);
+            String start = ((RespBulkString) keys.get(i + keys.size() / 2)).value();
+            RedisStream stream = streams.get(key);
+
+            if (stream != null) {
+                RespArray read = stream.read(start);
+                if (!read.values().isEmpty()) {
+                    output.add(new RespArray(List.of(key, read)));
+                }
+            }
+        }
+        return new RespArray(output);
+    }
 }

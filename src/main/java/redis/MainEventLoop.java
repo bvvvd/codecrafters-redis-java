@@ -36,6 +36,7 @@ public class MainEventLoop implements AutoCloseable {
     private PendingWait pendingWait;
     private String lastCommand;
     private final Map<RespValue, Queue<PendingWait>> blPopWaiters;
+    private final Map<List<RespValue>, PendingWait> xReadWaiters;
 
     public MainEventLoop(RedisConfig redisConfig, Cache cache, StreamCache streams) throws IOException {
         selector = Selector.open();
@@ -51,6 +52,7 @@ public class MainEventLoop implements AutoCloseable {
         this.streams = streams;
         replicationService = new EventReplicationService(redisConfig, parser, 0L);
         blPopWaiters = new HashMap<>();
+        xReadWaiters = new HashMap<>();
     }
 
     public void serve() throws IOException {
@@ -63,6 +65,7 @@ public class MainEventLoop implements AutoCloseable {
             selector.select(10);
             checkWaitClients();
             checkBlPopWaiters();
+            checkXReadWaiters();
             Set<SelectionKey> keys = selector.selectedKeys();
             handleKeys(keys);
             keys.clear();
@@ -156,6 +159,24 @@ public class MainEventLoop implements AutoCloseable {
         return false;
     }
 
+    private void checkXReadWaiters() {
+        var iterator = xReadWaiters.entrySet().iterator();
+        while (iterator.hasNext()) {
+            var entry = iterator.next();
+
+            if (System.currentTimeMillis() > entry.getValue().expiration) {
+                sendResponse(entry.getValue().state, new RespBulkString(null).serialize());
+                iterator.remove();
+            } else {
+                RespArray read = streams.xReadBlocking(entry.getKey());
+                if (!read.values().isEmpty()) {
+                    sendResponse(entry.getValue().state, read.serialize());
+                    iterator.remove();
+                }
+            }
+        }
+    }
+
     private void handleAccept(SelectionKey key) throws IOException {
         ServerSocketChannel server = (ServerSocketChannel) key.channel();
         SocketChannel client = server.accept();
@@ -220,9 +241,24 @@ public class MainEventLoop implements AutoCloseable {
     }
 
     private void xRead(List<RespValue> values, ClientState state) {
-        List<RespValue> keys = values.subList(2, values.size());
+        if (values.get(1) instanceof RespBulkString type
+            && type.value().equalsIgnoreCase("block")) {
+            int timeout = Integer.parseInt(((RespBulkString) values.get(2)).value());
+            List<RespValue> keys = values.subList(4, values.size());
 
-        sendResponse(state, streams.xRead(keys).serialize());
+            RespArray data = streams.xReadBlocking(keys);
+            if (!data.values().isEmpty()) {
+                sendResponse(state, data.serialize());
+            } else {
+                state.pendingForAcks = true;
+                PendingWait xReadWait = new PendingWait(state, -1, System.currentTimeMillis() + timeout);
+                xReadWaiters.put(keys, xReadWait);
+            }
+        } else {
+            List<RespValue> keys = values.subList(2, values.size());
+
+            sendResponse(state, streams.xRead(keys).serialize());
+        }
     }
 
     private void xRange(List<RespValue> values, ClientState state) {

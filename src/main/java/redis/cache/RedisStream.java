@@ -105,7 +105,7 @@ public class RedisStream {
         return new long[]{Math.min(maxEntryId, Long.parseLong(split[0])), Long.parseLong(split[1])};
     }
 
-    public RespValue read(String left) {
+    public RespArray read(String left) {
         long[] start = getStart(left);
         List<RespValue> rangeValues = new ArrayList<>();
         streamStorage.tailMap(start[0], true)
@@ -125,7 +125,7 @@ public class RedisStream {
         return new RespArray(rangeValues);
     }
 
-    private class StreamNode {
+    private static class StreamNode {
         TreeMap<Long, List<RespValue>> values = new TreeMap<>();
 
         public RespValue append(long timePart, long predefinedSequenceNumber, List<RespValue> streamValues) {
