@@ -37,6 +37,7 @@ public class MainEventLoop implements AutoCloseable {
     private String lastCommand;
     private final Map<RespValue, Queue<PendingWait>> blPopWaiters;
     private final Map<List<RespValue>, PendingWait> xReadWaiters;
+    private final Map<ClientState, Queue<List<RespValue>>> transactions;
 
     public MainEventLoop(RedisConfig redisConfig, Cache cache, StreamCache streams) throws IOException {
         selector = Selector.open();
@@ -53,6 +54,7 @@ public class MainEventLoop implements AutoCloseable {
         replicationService = new EventReplicationService(redisConfig, parser, 0L);
         blPopWaiters = new HashMap<>();
         xReadWaiters = new HashMap<>();
+        transactions = new HashMap<>();
     }
 
     public void serve() throws IOException {
@@ -244,10 +246,15 @@ public class MainEventLoop implements AutoCloseable {
     }
 
     private void exec(List<RespValue> values, ClientState state) {
-        sendResponse(state, new RespError("ERR EXEC without MULTI").serialize());
+        if (!transactions.containsKey(state)) {
+            sendResponse(state, new RespError("ERR EXEC without MULTI").serialize());
+        } else {
+            sendResponse(state, new RespArray(List.of()).serialize());
+        }
     }
 
     private void multi(List<RespValue> values, ClientState state) {
+        transactions.put(state, new LinkedList<>());
         sendResponse(state, new RespBulkString("OK").serialize());
     }
 
