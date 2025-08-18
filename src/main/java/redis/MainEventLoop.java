@@ -244,16 +244,13 @@ public class MainEventLoop implements AutoCloseable {
     private void incr(List<RespValue> values, ClientState state) {
         RespValue key = values.get(1);
         CachedValue<RespValue> cachedValue = cache.get(key);
-        RespValue value = cachedValue.value();
-        RespInteger respInteger;
-        if (value instanceof RespBulkString stringValue) {
-            respInteger = stringValue.toRespInteger();
-            cache.put(key, respInteger, cachedValue.expirationTime());
+        RespBulkString respBulkString = (RespBulkString) cachedValue.value();
+        if (respBulkString.value() == null) {
+            respBulkString.setValue("1");
         } else {
-            respInteger = ((RespInteger) value);
+            respBulkString.setValue(Long.toString(Long.parseLong(respBulkString.value()) + 1));
         }
-        respInteger.increment();
-        sendResponse(state, respInteger.serialize());
+        sendResponse(state, new RespInteger(Long.parseLong(respBulkString.value())).serialize());
     }
 
     private void xRead(List<RespValue> values, ClientState state) {

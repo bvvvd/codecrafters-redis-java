@@ -6,7 +6,7 @@ import java.util.Objects;
 import static redis.resp.SerializerUtils.integerAsByteSequence;
 
 public final class RespBulkString extends AbstractRespValue {
-    private final String value;
+    private String value;
 
     public RespBulkString(String value) {
         super();
@@ -73,11 +73,7 @@ public final class RespBulkString extends AbstractRespValue {
                "size=" + getSize() + ']';
     }
 
-    public RespInteger toRespInteger() {
-        try {
-            return new RespInteger(Long.parseLong(value));
-        } catch (NumberFormatException _) {
-            return new RespInteger(0);
-        }
+    public void setValue(String newValue) {
+        this.value = newValue;
     }
 }

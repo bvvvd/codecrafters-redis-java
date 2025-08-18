@@ -6,7 +6,7 @@ import java.util.Objects;
 import static redis.resp.SerializerUtils.integerAsByteSequence;
 
 public final class RespInteger extends AbstractRespValue {
-    private long value;
+    private final long value;
 
     public RespInteger(long value) {
         super();
@@ -71,9 +71,5 @@ public final class RespInteger extends AbstractRespValue {
         return "RespInteger[" +
                "value=" + value + ", " +
                "size=" + getSize() + ']';
-    }
-
-    public void increment() {
-        value++;
     }
 }
