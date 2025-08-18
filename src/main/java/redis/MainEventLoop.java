@@ -230,6 +230,7 @@ public class MainEventLoop implements AutoCloseable {
                     case "XRANGE" -> xRange(values, state);
                     case "XREAD" -> xRead(values, state);
                     case "INCR" -> incr(values, state);
+                    case "MULTI" -> multi(values, state);
                     default -> sendResponse(state, "-ERR unknown command\r\n".getBytes());
                 }
                 lastCommand = command;
@@ -239,6 +240,10 @@ public class MainEventLoop implements AutoCloseable {
         if (!state.pendingForAcks) {
             key.interestOps(SelectionKey.OP_WRITE);
         }
+    }
+
+    private void multi(List<RespValue> values, ClientState state) {
+        sendResponse(state, new RespBulkString("OK").serialize());
     }
 
     private void incr(List<RespValue> values, ClientState state) {
