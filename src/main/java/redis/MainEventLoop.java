@@ -231,6 +231,7 @@ public class MainEventLoop implements AutoCloseable {
                     case "XREAD" -> xRead(values, state);
                     case "INCR" -> incr(values, state);
                     case "MULTI" -> multi(values, state);
+                    case "EXEC" -> exec(values, state);
                     default -> sendResponse(state, "-ERR unknown command\r\n".getBytes());
                 }
                 lastCommand = command;
@@ -240,6 +241,10 @@ public class MainEventLoop implements AutoCloseable {
         if (!state.pendingForAcks) {
             key.interestOps(SelectionKey.OP_WRITE);
         }
+    }
+
+    private void exec(List<RespValue> values, ClientState state) {
+        sendResponse(state, new RespError("ERR EXEC without MULTI").serialize());
     }
 
     private void multi(List<RespValue> values, ClientState state) {
