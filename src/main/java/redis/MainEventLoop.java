@@ -250,6 +250,7 @@ public class MainEventLoop implements AutoCloseable {
             sendResponse(state, new RespError("ERR EXEC without MULTI").serialize());
         } else {
             sendResponse(state, new RespArray(List.of()).serialize());
+            transactions.remove(state);
         }
     }
 
