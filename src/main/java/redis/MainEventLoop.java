@@ -125,35 +125,35 @@ public class MainEventLoop implements AutoCloseable {
     private boolean checkBlPopWaiters(RespValue key) {
         Queue<PendingWait> waiters = blPopWaiters.get(key);
         if (waiters != null) {
-                PendingWait firstWaiter = waiters.peek();
-                long currentTime = System.currentTimeMillis();
-                if (firstWaiter.expiration != -1 && currentTime >= firstWaiter.expiration) {
-                    sendResponse(firstWaiter.state, new RespBulkString(null).serialize());
-                    if (waiters.size() == 1) {
-                        blPopWaiters.remove(key);
-                    } else {
-                        waiters.poll();
-                    }
-                    return true;
+            PendingWait firstWaiter = waiters.peek();
+            long currentTime = System.currentTimeMillis();
+            if (firstWaiter.expiration != -1 && currentTime >= firstWaiter.expiration) {
+                sendResponse(firstWaiter.state, new RespBulkString(null).serialize());
+                if (waiters.size() == 1) {
+                    blPopWaiters.remove(key);
                 } else {
-                    CachedValue<RespValue> cachedValue = cache.get(key);
-                    if (cachedValue.value() instanceof RespArray array) {
-                        firstWaiter = waiters.poll();
-                        if (array.values().size() == 1) {
-                            cache.remove(key);
-                            sendResponse(firstWaiter.state, new RespArray(List.of(key, array.values().getFirst())).serialize());
-                        } else {
-                            sendResponse(firstWaiter.state, new RespArray(List.of(key, array.values().removeFirst())).serialize());
-                        }
-                        while (!waiters.isEmpty()) {
-                            PendingWait waiter = waiters.poll();
-                            waiter.state.pendingForAcks = false;
-                        }
-                        cache.remove(key);
-                        blPopWaiters.remove(key);
-                        return true;
-                    }
+                    waiters.poll();
                 }
+                return true;
+            } else {
+                CachedValue<RespValue> cachedValue = cache.get(key);
+                if (cachedValue.value() instanceof RespArray array) {
+                    firstWaiter = waiters.poll();
+                    if (array.values().size() == 1) {
+                        cache.remove(key);
+                        sendResponse(firstWaiter.state, new RespArray(List.of(key, array.values().getFirst())).serialize());
+                    } else {
+                        sendResponse(firstWaiter.state, new RespArray(List.of(key, array.values().removeFirst())).serialize());
+                    }
+                    while (!waiters.isEmpty()) {
+                        PendingWait waiter = waiters.poll();
+                        waiter.state.pendingForAcks = false;
+                    }
+                    cache.remove(key);
+                    blPopWaiters.remove(key);
+                    return true;
+                }
+            }
         }
 
         return false;
@@ -245,12 +245,16 @@ public class MainEventLoop implements AutoCloseable {
         RespValue key = values.get(1);
         CachedValue<RespValue> cachedValue = cache.get(key);
         RespBulkString respBulkString = (RespBulkString) cachedValue.value();
-        if (respBulkString.value() == null) {
-            respBulkString.setValue("1");
-        } else {
-            respBulkString.setValue(Long.toString(Long.parseLong(respBulkString.value()) + 1));
+        try {
+            if (respBulkString.value() == null) {
+                respBulkString.setValue("1");
+            } else {
+                respBulkString.setValue(Long.toString(Long.parseLong(respBulkString.value()) + 1));
+            }
+            sendResponse(state, new RespInteger(Long.parseLong(respBulkString.value())).serialize());
+        } catch (NumberFormatException _) {
+            sendResponse(state, new RespError("ERR value is not an integer or out of range").serialize());
         }
-        sendResponse(state, new RespInteger(Long.parseLong(respBulkString.value())).serialize());
     }
 
     private void xRead(List<RespValue> values, ClientState state) {
