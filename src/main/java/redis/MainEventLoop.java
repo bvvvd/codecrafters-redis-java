@@ -229,6 +229,7 @@ public class MainEventLoop implements AutoCloseable {
                     case "XADD" -> xAdd(values, state);
                     case "XRANGE" -> xRange(values, state);
                     case "XREAD" -> xRead(values, state);
+                    case "INCR" -> incr(values, state);
                     default -> sendResponse(state, "-ERR unknown command\r\n".getBytes());
                 }
                 lastCommand = command;
@@ -238,6 +239,21 @@ public class MainEventLoop implements AutoCloseable {
         if (!state.pendingForAcks) {
             key.interestOps(SelectionKey.OP_WRITE);
         }
+    }
+
+    private void incr(List<RespValue> values, ClientState state) {
+        RespValue key = values.get(1);
+        CachedValue<RespValue> cachedValue = cache.get(key);
+        RespValue value = cachedValue.value();
+        RespInteger respInteger;
+        if (value instanceof RespBulkString stringValue) {
+            respInteger = stringValue.toRespInteger();
+            cache.put(key, respInteger, cachedValue.expirationTime());
+        } else {
+            respInteger = ((RespInteger) value);
+        }
+        respInteger.increment();
+        sendResponse(state, respInteger.serialize());
     }
 
     private void xRead(List<RespValue> values, ClientState state) {

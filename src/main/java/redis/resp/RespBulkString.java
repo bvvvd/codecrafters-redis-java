@@ -72,4 +72,12 @@ public final class RespBulkString extends AbstractRespValue {
                "value=" + value + ", " +
                "size=" + getSize() + ']';
     }
+
+    public RespInteger toRespInteger() {
+        try {
+            return new RespInteger(Long.parseLong(value));
+        } catch (NumberFormatException _) {
+            return new RespInteger(0);
+        }
+    }
 }
