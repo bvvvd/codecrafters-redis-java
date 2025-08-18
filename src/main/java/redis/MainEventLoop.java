@@ -24,6 +24,7 @@ public class MainEventLoop implements AutoCloseable {
             new RespBulkString("GETACK"),
             new RespBulkString("*")
     ));
+    private static final RespSimpleString QUEUED = new RespSimpleString("QUEUED");
     private final Selector selector;
     private final ServerSocketChannel serverChannel;
     private final Set<SocketChannel> servingClients;
@@ -210,31 +211,36 @@ public class MainEventLoop implements AutoCloseable {
             if (respValue instanceof RespArray array) {
                 List<RespValue> values = array.values();
                 String command = ((RespBulkString) values.getFirst()).value();
-                switch (command) {
-                    case "PING" -> ping(state);
-                    case "ECHO" -> echo(state, values);
-                    case "SET" -> set(values, state, array);
-                    case "GET" -> get(values, state);
-                    case "CONFIG" -> configGet(values, state);
-                    case "KEYS" -> keys(state);
-                    case "INFO" -> info(state);
-                    case "REPLCONF" -> replConf(values, state, array);
-                    case "PSYNC" -> pSync(state);
-                    case "WAIT" -> wait(values, state);
-                    case "RPUSH" -> rPush(values, state, array);
-                    case "LRANGE" -> lRange(values, state);
-                    case "LPUSH" -> lPush(values, state, array);
-                    case "LLEN" -> lLen(values, state);
-                    case "LPOP" -> lPop(values, state, array);
-                    case "BLPOP" -> blPop(values, state, array);
-                    case "TYPE" -> type(values, state);
-                    case "XADD" -> xAdd(values, state);
-                    case "XRANGE" -> xRange(values, state);
-                    case "XREAD" -> xRead(values, state);
-                    case "INCR" -> incr(values, state);
-                    case "MULTI" -> multi(values, state);
-                    case "EXEC" -> exec(values, state);
-                    default -> sendResponse(state, "-ERR unknown command\r\n".getBytes());
+                if (!"EXEC".equalsIgnoreCase(command) && transactions.containsKey(state)) {
+                    transactions.get(state).add(values);
+                    sendResponse(state, QUEUED.serialize());
+                } else {
+                    switch (command) {
+                        case "PING" -> ping(state);
+                        case "ECHO" -> echo(state, values);
+                        case "SET" -> set(values, state, array);
+                        case "GET" -> get(values, state);
+                        case "CONFIG" -> configGet(values, state);
+                        case "KEYS" -> keys(state);
+                        case "INFO" -> info(state);
+                        case "REPLCONF" -> replConf(values, state, array);
+                        case "PSYNC" -> pSync(state);
+                        case "WAIT" -> wait(values, state);
+                        case "RPUSH" -> rPush(values, state, array);
+                        case "LRANGE" -> lRange(values, state);
+                        case "LPUSH" -> lPush(values, state, array);
+                        case "LLEN" -> lLen(values, state);
+                        case "LPOP" -> lPop(values, state, array);
+                        case "BLPOP" -> blPop(values, state, array);
+                        case "TYPE" -> type(values, state);
+                        case "XADD" -> xAdd(values, state);
+                        case "XRANGE" -> xRange(values, state);
+                        case "XREAD" -> xRead(values, state);
+                        case "INCR" -> incr(values, state);
+                        case "MULTI" -> multi(values, state);
+                        case "EXEC" -> exec(values, state);
+                        default -> sendResponse(state, new RespSimpleString("ERR unknown command").serialize());
+                    }
                 }
                 lastCommand = command;
             }
