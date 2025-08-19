@@ -41,6 +41,7 @@ public class MainEventLoop implements AutoCloseable {
     private final Map<RespValue, Queue<PendingWait>> blPopWaiters;
     private final Map<List<RespValue>, PendingWait> xReadWaiters;
     private final Map<ClientState, Queue<RespArray>> transactions;
+    private final Map<ClientState, Set<RespValue>> pubSub;
 
     public MainEventLoop(RedisConfig redisConfig, Cache cache, StreamCache streams) throws IOException {
         selector = Selector.open();
@@ -58,6 +59,7 @@ public class MainEventLoop implements AutoCloseable {
         blPopWaiters = new HashMap<>();
         xReadWaiters = new HashMap<>();
         transactions = new HashMap<>();
+        pubSub = new HashMap<>();
     }
 
     public void serve() throws IOException {
@@ -256,17 +258,21 @@ public class MainEventLoop implements AutoCloseable {
             case "XRANGE" -> xRange(values);
             case "XREAD" -> xRead(values, state);
             case "INCR" -> incr(values);
-            case "MULTI" -> multi(values, state);
-            case "EXEC" -> exec(values, state);
+            case "MULTI" -> multi(state);
+            case "EXEC" -> exec(state);
             case "DISCARD" -> discard(state);
-            case "SUBSCRIBE" -> subscribe(values);
+            case "SUBSCRIBE" -> subscribe(values, state);
             default -> new RespSimpleString("ERR unknown command").serialize();
         };
     }
 
-    private byte[] subscribe(List<RespValue> values) {
+    private byte[] subscribe(List<RespValue> values, ClientState state) {
         RespValue channel = values.get(1);
-        return new RespArray(List.of(new RespBulkString("subscribe"), channel, new RespInteger(1))).serialize();
+        if (!pubSub.containsKey(state)) {
+            pubSub.put(state, new HashSet<>());
+        }
+        pubSub.get(state).add(channel);
+        return new RespArray(List.of(new RespBulkString("subscribe"), channel, new RespInteger(pubSub.get(state).size()))).serialize();
     }
 
     private byte[] discard(ClientState state) {
@@ -278,7 +284,7 @@ public class MainEventLoop implements AutoCloseable {
         }
     }
 
-    private byte[] exec(List<RespValue> values, ClientState state) throws IOException {
+    private byte[] exec(ClientState state) throws IOException {
         if (!transactions.containsKey(state)) {
             return new RespError("ERR EXEC without MULTI").serialize();
         } else {
@@ -315,7 +321,7 @@ public class MainEventLoop implements AutoCloseable {
         return transactionResponse;
     }
 
-    private byte[] multi(List<RespValue> values, ClientState state) {
+    private byte[] multi(ClientState state) {
         transactions.put(state, new LinkedList<>());
         return new RespBulkString("OK").serialize();
     }
