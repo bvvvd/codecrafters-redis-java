@@ -282,7 +282,7 @@ public class MainEventLoop implements AutoCloseable {
         for (var entry : pubSub.entrySet()) {
             if (entry.getValue().contains(channel)) {
                 subscriptions++;
-                sendResponse(entry.getKey(), content.serialize());
+                sendResponse(entry.getKey(), new RespArray(List.of(new RespBulkString("message"), channel, content)).serialize());
             }
         }
         return new RespInteger(subscriptions).serialize();
