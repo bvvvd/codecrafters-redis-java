@@ -245,7 +245,7 @@ public class MainEventLoop implements AutoCloseable {
         List<RespValue> values = array.values();
         String command = ((RespBulkString) values.getFirst()).value();
         return switch (command) {
-            case "PING" -> ping();
+            case "PING" -> ping(state);
             case "ECHO" -> echo(values);
             case "SET" -> set(values, array);
             case "GET" -> get(values);
@@ -564,8 +564,11 @@ public class MainEventLoop implements AutoCloseable {
         return null;
     }
 
-    private byte[] ping() {
+    private byte[] ping(ClientState state) {
         if (config.getRole().equalsIgnoreCase("master")) {
+            if (pubSub.containsKey(state)) {
+                return new RespArray(List.of(new RespBulkString("PING"), new RespBulkString(""))).serialize();
+            }
             return PONG;
         }
         replicationService.moveOffset(PONG.length * 2);
