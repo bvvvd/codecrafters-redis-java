@@ -213,7 +213,7 @@ public class MainEventLoop implements AutoCloseable {
             if (respValue instanceof RespArray array) {
                 List<RespValue> values = array.values();
                 String command = ((RespBulkString) values.getFirst()).value();
-                if (!"EXEC".equalsIgnoreCase(command) && transactions.containsKey(state)) {
+                if (!("EXEC".equalsIgnoreCase(command) || "DISCARD".equalsIgnoreCase(command)) && transactions.containsKey(state)) {
                     transactions.get(state).add(array);
                     sendResponse(state, QUEUED);
                 } else {
@@ -258,15 +258,14 @@ public class MainEventLoop implements AutoCloseable {
             case "INCR" -> incr(values);
             case "MULTI" -> multi(values, state);
             case "EXEC" -> exec(values, state);
-            case "DISCARD" -> discard(values, state);
+            case "DISCARD" -> discard(state);
             default -> new RespSimpleString("ERR unknown command").serialize();
         };
     }
 
-    private byte[] discard(List<RespValue> values, ClientState state) {
-        RespValue key = values.get(1);
-        if (transactions.containsKey(key)) {
-            transactions.remove(key);
+    private byte[] discard(ClientState state) {
+        if (transactions.containsKey(state)) {
+            transactions.remove(state);
             return OK;
         } else {
             return new RespError("ERR DISCARD without MULTI").serialize();
