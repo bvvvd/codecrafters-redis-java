@@ -258,8 +258,19 @@ public class MainEventLoop implements AutoCloseable {
             case "INCR" -> incr(values);
             case "MULTI" -> multi(values, state);
             case "EXEC" -> exec(values, state);
+            case "DISCARD" -> discard(values, state);
             default -> new RespSimpleString("ERR unknown command").serialize();
         };
+    }
+
+    private byte[] discard(List<RespValue> values, ClientState state) {
+        RespValue key = values.get(1);
+        if (transactions.containsKey(key)) {
+            transactions.remove(key);
+            return OK;
+        } else {
+            return new RespError("ERR DISCARD without MULTI").serialize();
+        }
     }
 
     private byte[] exec(List<RespValue> values, ClientState state) throws IOException {
