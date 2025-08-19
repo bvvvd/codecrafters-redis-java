@@ -259,8 +259,14 @@ public class MainEventLoop implements AutoCloseable {
             case "MULTI" -> multi(values, state);
             case "EXEC" -> exec(values, state);
             case "DISCARD" -> discard(state);
+            case "SUBSCRIBE" -> subscribe(values);
             default -> new RespSimpleString("ERR unknown command").serialize();
         };
+    }
+
+    private byte[] subscribe(List<RespValue> values) {
+        RespValue channel = values.get(1);
+        return new RespArray(List.of(new RespBulkString("subscribe"), channel, new RespBulkString("1"))).serialize();
     }
 
     private byte[] discard(ClientState state) {
