@@ -215,7 +215,15 @@ public class MainEventLoop implements AutoCloseable {
             if (respValue instanceof RespArray array) {
                 List<RespValue> values = array.values();
                 String command = ((RespBulkString) values.getFirst()).value();
-                if (!("EXEC".equalsIgnoreCase(command) || "DISCARD".equalsIgnoreCase(command)) && transactions.containsKey(state)) {
+                if (pubSub.containsKey(state) &&
+                    !"SUBSCRIBE".equalsIgnoreCase(command)
+                    && !"UNSUBSCRIBE".equalsIgnoreCase(command)
+                    && !"PSUBSCRIBE".equalsIgnoreCase(command)
+                    && !"PUNSUBSCRIBE".equalsIgnoreCase(command)
+                    && !"PING".equalsIgnoreCase(command)
+                    && !"QUIT".equalsIgnoreCase(command)) {
+                    sendResponse(state, new RespError("ERR Can't execute '%s': only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context".formatted(command)).serialize());
+                } else if (!("EXEC".equalsIgnoreCase(command) || "DISCARD".equalsIgnoreCase(command)) && transactions.containsKey(state)) {
                     transactions.get(state).add(array);
                     sendResponse(state, QUEUED);
                 } else {
@@ -268,10 +276,7 @@ public class MainEventLoop implements AutoCloseable {
 
     private byte[] subscribe(List<RespValue> values, ClientState state) {
         RespValue channel = values.get(1);
-        if (!pubSub.containsKey(state)) {
-            pubSub.put(state, new HashSet<>());
-        }
-        pubSub.get(state).add(channel);
+        pubSub.computeIfAbsent(state, k -> new HashSet<>()).add(channel);
         return new RespArray(List.of(new RespBulkString("subscribe"), channel, new RespInteger(pubSub.get(state).size()))).serialize();
     }
 
