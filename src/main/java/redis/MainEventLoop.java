@@ -567,7 +567,7 @@ public class MainEventLoop implements AutoCloseable {
     private byte[] ping(ClientState state) {
         if (config.getRole().equalsIgnoreCase("master")) {
             if (pubSub.containsKey(state)) {
-                return new RespArray(List.of(new RespBulkString("PING"), new RespBulkString(""))).serialize();
+                return new RespArray(List.of(new RespBulkString("ping"), new RespBulkString(""))).serialize();
             }
             return PONG;
         }
