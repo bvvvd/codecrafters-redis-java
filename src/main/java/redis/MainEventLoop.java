@@ -19,12 +19,14 @@ import static redis.util.Logger.debug;
 import static redis.util.Logger.error;
 
 public class MainEventLoop implements AutoCloseable {
+    private static final byte[] PONG = new RespSimpleString("PONG").serialize();
     private static final RespArray ACK_COMMAND = new RespArray(List.of(
             new RespBulkString("REPLCONF"),
             new RespBulkString("GETACK"),
             new RespBulkString("*")
     ));
-    private static final RespSimpleString QUEUED = new RespSimpleString("QUEUED");
+    private static final byte[] QUEUED = new RespSimpleString("QUEUED").serialize();
+    private static final byte[] OK = new RespSimpleString("OK").serialize();
     private final Selector selector;
     private final ServerSocketChannel serverChannel;
     private final Set<SocketChannel> servingClients;
@@ -38,7 +40,7 @@ public class MainEventLoop implements AutoCloseable {
     private String lastCommand;
     private final Map<RespValue, Queue<PendingWait>> blPopWaiters;
     private final Map<List<RespValue>, PendingWait> xReadWaiters;
-    private final Map<ClientState, Queue<List<RespValue>>> transactions;
+    private final Map<ClientState, Queue<RespArray>> transactions;
 
     public MainEventLoop(RedisConfig redisConfig, Cache cache, StreamCache streams) throws IOException {
         selector = Selector.open();
@@ -212,34 +214,12 @@ public class MainEventLoop implements AutoCloseable {
                 List<RespValue> values = array.values();
                 String command = ((RespBulkString) values.getFirst()).value();
                 if (!"EXEC".equalsIgnoreCase(command) && transactions.containsKey(state)) {
-                    transactions.get(state).add(values);
-                    sendResponse(state, QUEUED.serialize());
+                    transactions.get(state).add(array);
+                    sendResponse(state, QUEUED);
                 } else {
-                    switch (command) {
-                        case "PING" -> ping(state);
-                        case "ECHO" -> echo(state, values);
-                        case "SET" -> set(values, state, array);
-                        case "GET" -> get(values, state);
-                        case "CONFIG" -> configGet(values, state);
-                        case "KEYS" -> keys(state);
-                        case "INFO" -> info(state);
-                        case "REPLCONF" -> replConf(values, state, array);
-                        case "PSYNC" -> pSync(state);
-                        case "WAIT" -> wait(values, state);
-                        case "RPUSH" -> rPush(values, state, array);
-                        case "LRANGE" -> lRange(values, state);
-                        case "LPUSH" -> lPush(values, state, array);
-                        case "LLEN" -> lLen(values, state);
-                        case "LPOP" -> lPop(values, state, array);
-                        case "BLPOP" -> blPop(values, state, array);
-                        case "TYPE" -> type(values, state);
-                        case "XADD" -> xAdd(values, state);
-                        case "XRANGE" -> xRange(values, state);
-                        case "XREAD" -> xRead(values, state);
-                        case "INCR" -> incr(values, state);
-                        case "MULTI" -> multi(values, state);
-                        case "EXEC" -> exec(values, state);
-                        default -> sendResponse(state, new RespSimpleString("ERR unknown command").serialize());
+                    byte[] response = handleCommand(array, state);
+                    if (response != null) {
+                        sendResponse(state, response);
                     }
                 }
                 lastCommand = command;
@@ -251,21 +231,80 @@ public class MainEventLoop implements AutoCloseable {
         }
     }
 
-    private void exec(List<RespValue> values, ClientState state) {
+    private byte[] handleCommand(RespArray array, ClientState state) throws IOException {
+        List<RespValue> values = array.values();
+        String command = ((RespBulkString) values.getFirst()).value();
+        return switch (command) {
+            case "PING" -> ping();
+            case "ECHO" -> echo(values);
+            case "SET" -> set(values, array);
+            case "GET" -> get(values);
+            case "CONFIG" -> configGet(values);
+            case "KEYS" -> keys();
+            case "INFO" -> info();
+            case "REPLCONF" -> replConf(values, array);
+            case "PSYNC" -> pSync(state);
+            case "WAIT" -> wait(values, state);
+            case "RPUSH" -> rPush(values, array);
+            case "LRANGE" -> lRange(values);
+            case "LPUSH" -> lPush(values, array);
+            case "LLEN" -> lLen(values);
+            case "LPOP" -> lPop(values, array);
+            case "BLPOP" -> blPop(values, state, array);
+            case "TYPE" -> type(values);
+            case "XADD" -> xAdd(values);
+            case "XRANGE" -> xRange(values);
+            case "XREAD" -> xRead(values, state);
+            case "INCR" -> incr(values);
+            case "MULTI" -> multi(values, state);
+            case "EXEC" -> exec(values, state);
+            default -> new RespSimpleString("ERR unknown command").serialize();
+        };
+    }
+
+    private byte[] exec(List<RespValue> values, ClientState state) throws IOException {
         if (!transactions.containsKey(state)) {
-            sendResponse(state, new RespError("ERR EXEC without MULTI").serialize());
+            return new RespError("ERR EXEC without MULTI").serialize();
         } else {
-            sendResponse(state, new RespArray(List.of()).serialize());
+            byte[] response = exec(transactions.get(state), state);
             transactions.remove(state);
+            return response;
         }
     }
 
-    private void multi(List<RespValue> values, ClientState state) {
-        transactions.put(state, new LinkedList<>());
-        sendResponse(state, new RespBulkString("OK").serialize());
+    private byte[] exec(Queue<RespArray> queue, ClientState state) throws IOException {
+        List<byte[]> responses = new ArrayList<>(queue.size());
+        while (!queue.isEmpty()) {
+            responses.add(handleCommand(queue.poll(), state));
+        }
+        int totalSize = 0;
+        for (byte[] response : responses) {
+            totalSize += response.length;
+        }
+        byte[] transactionResponse = new byte[totalSize + 3 + Integer.toString(responses.size()).length()];
+        transactionResponse[0] = '*';
+        int i = 1;
+        for (byte b : Integer.toString(responses.size()).getBytes()) {
+            transactionResponse[i] = b;
+            i++;
+        }
+        transactionResponse[i] = '\r';
+        i++;
+        transactionResponse[i] = '\n';
+        i++;
+        for (byte[] response : responses) {
+            System.arraycopy(response, 0, transactionResponse, i, response.length);
+            i += response.length;
+        }
+        return transactionResponse;
     }
 
-    private void incr(List<RespValue> values, ClientState state) {
+    private byte[] multi(List<RespValue> values, ClientState state) {
+        transactions.put(state, new LinkedList<>());
+        return new RespBulkString("OK").serialize();
+    }
+
+    private byte[] incr(List<RespValue> values) {
         RespValue key = values.get(1);
         CachedValue<RespValue> cachedValue = cache.get(key);
         RespBulkString respBulkString = (RespBulkString) cachedValue.value();
@@ -275,13 +314,13 @@ public class MainEventLoop implements AutoCloseable {
             } else {
                 respBulkString.setValue(Long.toString(Long.parseLong(respBulkString.value()) + 1));
             }
-            sendResponse(state, new RespInteger(Long.parseLong(respBulkString.value())).serialize());
+            return new RespInteger(Long.parseLong(respBulkString.value())).serialize();
         } catch (NumberFormatException _) {
-            sendResponse(state, new RespError("ERR value is not an integer or out of range").serialize());
+            return new RespError("ERR value is not an integer or out of range").serialize();
         }
     }
 
-    private void xRead(List<RespValue> values, ClientState state) {
+    private byte[] xRead(List<RespValue> values, ClientState state) {
         if (values.get(1) instanceof RespBulkString type
             && type.value().equalsIgnoreCase("block")) {
             int timeout = Integer.parseInt(((RespBulkString) values.get(2)).value());
@@ -289,7 +328,7 @@ public class MainEventLoop implements AutoCloseable {
 
             RespArray data = streams.xReadBlocking(keys);
             if (!data.values().isEmpty()) {
-                sendResponse(state, data.serialize());
+                return data.serialize();
             } else {
                 state.pendingForAcks = true;
                 PendingWait xReadWait = new PendingWait(state, -1, timeout == 0 ? -1 : System.currentTimeMillis() + timeout);
@@ -298,11 +337,12 @@ public class MainEventLoop implements AutoCloseable {
         } else {
             List<RespValue> keys = values.subList(2, values.size());
 
-            sendResponse(state, streams.xRead(keys).serialize());
+            return streams.xRead(keys).serialize();
         }
+        return null;
     }
 
-    private void xRange(List<RespValue> values, ClientState state) {
+    private byte[] xRange(List<RespValue> values) {
         RespValue key = values.get(1);
         String start = null;
         String end = null;
@@ -313,37 +353,38 @@ public class MainEventLoop implements AutoCloseable {
             }
         }
 
-        sendResponse(state, streams.range(key, start, end).serialize());
+        return streams.range(key, start, end).serialize();
     }
 
-    private void xAdd(List<RespValue> values, ClientState state) {
+    private byte[] xAdd(List<RespValue> values) {
         RespValue key = values.get(1);
         RespBulkString entryId = ((RespBulkString) values.get(2));
         List<RespValue> streamValues = values.subList(3, values.size());
-        sendResponse(state, streams.add(key, entryId, streamValues).serialize());
+        return streams.add(key, entryId, streamValues).serialize();
     }
 
-    private void type(List<RespValue> values, ClientState state) {
+    private byte[] type(List<RespValue> values) {
         RespBulkString key = (RespBulkString) values.get(1);
         CachedValue<RespValue> cachedValue = cache.get(key);
         if (cachedValue.value() instanceof RespArray) {
-            sendResponse(state, new RespSimpleString("list").serialize());
+            return new RespSimpleString("list").serialize();
         } else if (cachedValue.value() instanceof RespBulkString bulkString) {
             if (bulkString.value() == null) {
                 if (streams.containsKey(key)) {
-                    sendResponse(state, new RespSimpleString("stream").serialize());
+                    return new RespSimpleString("stream").serialize();
                 } else {
-                    sendResponse(state, new RespSimpleString("none").serialize());
+                    return new RespSimpleString("none").serialize();
                 }
             } else {
-                sendResponse(state, new RespSimpleString("string").serialize());
+                return new RespSimpleString("string").serialize();
             }
         } else if (cachedValue.value() instanceof RespSet) {
-            sendResponse(state, new RespSimpleString("set").serialize());
+            return new RespSimpleString("set").serialize();
         }
+        return null;
     }
 
-    private void blPop(List<RespValue> values, ClientState state, RespArray array) throws ClosedChannelException {
+    private byte[] blPop(List<RespValue> values, ClientState state, RespArray array) throws ClosedChannelException {
         RespValue key = values.get(1);
         CachedValue<RespValue> cachedValue = cache.get(key);
         if (!(cachedValue.value() instanceof RespArray cachedArray)) {
@@ -361,57 +402,58 @@ public class MainEventLoop implements AutoCloseable {
             boolean unblocked = checkBlPopWaiters(key);
             if (!unblocked) {
                 List<RespValue> list = cachedArray.values();
-                if (list.size() == 1) {
-                    cache.remove(key);
-                    sendResponse(state, new RespArray(List.of(key, list.getFirst())).serialize());
-                } else {
-                    sendResponse(state, new RespArray(List.of(key, list.removeFirst())).serialize());
-                }
                 if (config.getRole().equalsIgnoreCase("master")) {
                     replicationService.propagate(array, selector);
                 } else {
                     replicationService.moveOffset(array.getSize());
                 }
+                if (list.size() == 1) {
+                    cache.remove(key);
+                    return new RespArray(List.of(key, list.getFirst())).serialize();
+                } else {
+                    return new RespArray(List.of(key, list.removeFirst())).serialize();
+                }
             }
         }
+        return null;
     }
 
-    private void lPop(List<RespValue> values, ClientState state, RespArray array) throws ClosedChannelException {
+    private byte[] lPop(List<RespValue> values, RespArray array) throws ClosedChannelException {
         RespValue key = values.get(1);
         int range = values.size() < 3 || (!(values.get(2) instanceof RespBulkString respBulkString))
                 ? 1
                 : Integer.parseInt(respBulkString.value());
         CachedValue<RespValue> cachedValue = cache.get(key);
-        if (!(cachedValue.getValue() instanceof RespArray cachedArray) || cachedArray.values().isEmpty()) {
-            sendResponse(state, new RespBulkString(null).serialize());
-        } else if (cachedArray.values().size() <= range) {
-            cache.remove(key);
-            sendResponse(state, cachedArray.serialize());
-        } else if (range == 1) {
-            sendResponse(state, cachedArray.values().removeFirst().serialize());
-        } else {
-            List<RespValue> output = cachedArray.values().subList(0, Math.min(range, cachedArray.getSize()));
-            List<RespValue> newArray = cachedArray.values().subList(Math.min(range, cachedArray.values().size()), cachedArray.values().size());
-            cache.put(key, new RespArray(newArray), -1);
-            sendResponse(state, new RespArray(output).serialize());
-        }
         if (config.getRole().equalsIgnoreCase("master")) {
             replicationService.propagate(array, selector);
         } else {
             replicationService.moveOffset(array.getSize());
         }
-    }
-
-    private void lLen(List<RespValue> values, ClientState state) {
-        CachedValue<RespValue> cachedValue = cache.get(values.get(1));
-        if (cachedValue.value() instanceof RespArray array) {
-            sendResponse(state, new RespInteger(array.values().size()).serialize());
+        if (!(cachedValue.getValue() instanceof RespArray cachedArray) || cachedArray.values().isEmpty()) {
+            return new RespBulkString(null).serialize();
+        } else if (cachedArray.values().size() <= range) {
+            cache.remove(key);
+            return cachedArray.serialize();
+        } else if (range == 1) {
+            return cachedArray.values().removeFirst().serialize();
         } else {
-            sendResponse(state, new RespInteger(0).serialize());
+            List<RespValue> output = cachedArray.values().subList(0, Math.min(range, cachedArray.getSize()));
+            List<RespValue> newArray = cachedArray.values().subList(Math.min(range, cachedArray.values().size()), cachedArray.values().size());
+            cache.put(key, new RespArray(newArray), -1);
+            return new RespArray(output).serialize();
         }
     }
 
-    private void lPush(List<RespValue> values, ClientState state, RespArray array) throws ClosedChannelException {
+    private byte[] lLen(List<RespValue> values) {
+        CachedValue<RespValue> cachedValue = cache.get(values.get(1));
+        if (cachedValue.value() instanceof RespArray array) {
+            return new RespInteger(array.values().size()).serialize();
+        } else {
+            return new RespInteger(0).serialize();
+        }
+    }
+
+    private byte[] lPush(List<RespValue> values, RespArray array) throws ClosedChannelException {
         RespValue key = values.get(1);
         List<RespValue> listValue = new ArrayList<>();
         for (int i = 2; i < values.size(); i++) {
@@ -423,26 +465,26 @@ public class MainEventLoop implements AutoCloseable {
             newArray.addAll(cachedArray.values());
         }
         cache.put(key, new RespArray(newArray), -1);
-        sendResponse(state, new RespInteger(newArray.size()).serialize());
         if (config.getRole().equalsIgnoreCase("master")) {
             replicationService.propagate(array, selector);
         } else {
             replicationService.moveOffset(array.getSize());
         }
+        return new RespInteger(newArray.size()).serialize();
     }
 
-    private void lRange(List<RespValue> values, ClientState state) {
+    private byte[] lRange(List<RespValue> values) {
         RespValue key = values.get(1);
         int start = Integer.parseInt(((RespBulkString) values.get(2)).value());
         int end = Integer.parseInt(((RespBulkString) values.get(3)).value());
         CachedValue<RespValue> cachedValue = cache.get(key);
         if (cachedValue == null || !(cachedValue.getValue() instanceof RespArray array)) {
-            sendResponse(state, new RespArray(List.of()).serialize());
+            return new RespArray(List.of()).serialize();
         } else {
             int from = normalize(start, array.values());
             int to = normalize(end, array.values());
             List<RespValue> subList = array.values().subList(from, Math.min(array.values().size(), to + 1));
-            sendResponse(state, new RespArray(subList).serialize());
+            return new RespArray(subList).serialize();
         }
     }
 
@@ -457,34 +499,34 @@ public class MainEventLoop implements AutoCloseable {
         return index;
     }
 
-    private void rPush(List<RespValue> values, ClientState state, RespArray array) throws ClosedChannelException {
+    private byte[] rPush(List<RespValue> values, RespArray array) throws ClosedChannelException {
         RespValue key = values.get(1);
         List<RespValue> listValues = new ArrayList<>();
         for (int i = 2; i < values.size(); i++) {
             listValues.add(values.get(i));
         }
         CachedValue<RespValue> cachedValue = cache.get(key);
-        if (cachedValue == null || !(cachedValue.getValue() instanceof RespArray cachedArray)) {
-            cache.put(key, new RespArray(new CopyOnWriteArrayList<>(listValues)), -1);
-            sendResponse(state, new RespInteger(listValues.size()).serialize());
-        } else {
-            cachedArray.values().addAll(listValues);
-            sendResponse(state, new RespInteger(cachedArray.values().size()).serialize());
-        }
         if (config.getRole().equalsIgnoreCase("master")) {
             replicationService.propagate(array, selector);
         } else {
             replicationService.moveOffset(array.getSize());
         }
+        if (cachedValue == null || !(cachedValue.getValue() instanceof RespArray cachedArray)) {
+            cache.put(key, new RespArray(new CopyOnWriteArrayList<>(listValues)), -1);
+            return new RespInteger(listValues.size()).serialize();
+        } else {
+            cachedArray.values().addAll(listValues);
+            return new RespInteger(cachedArray.values().size()).serialize();
+        }
     }
 
-    private void wait(List<RespValue> values, ClientState state) throws IOException {
+    private byte[] wait(List<RespValue> values, ClientState state) throws IOException {
         int numberOfReplicas = Integer.parseInt(((RespBulkString) values.get(1)).value());
         int delta = Integer.parseInt(((RespBulkString) values.get(2)).value());
         long timeout = System.currentTimeMillis() + delta;
         debug("Received WAIT command with numslaves: %d and timeout: %d", numberOfReplicas, timeout);
         if (!Objects.equals(lastCommand, "SET")) {
-            sendResponse(state, new RespInteger(replicationService.getReplicaNumber()).serialize());
+            return new RespInteger(replicationService.getReplicaNumber()).serialize();
         } else {
             var numReplicas = Math.max(numberOfReplicas, replicationService.getReplicaNumber());
             PendingWait pendingWaitSync = new PendingWait(state, numReplicas, timeout);
@@ -492,21 +534,22 @@ public class MainEventLoop implements AutoCloseable {
             pendingWait = pendingWaitSync;
             state.pendingForAcks = true;
         }
+        return null;
     }
 
-    private void ping(ClientState state) {
+    private byte[] ping() {
         if (config.getRole().equalsIgnoreCase("master")) {
-            sendResponse(state, "+PONG\r\n".getBytes());
-        } else {
-            replicationService.moveOffset(14);
+            return PONG;
         }
+        replicationService.moveOffset(PONG.length * 2);
+        return null;
     }
 
-    private void echo(ClientState state, List<RespValue> values) {
-        sendResponse(state, values.getLast().serialize());
+    private byte[] echo(List<RespValue> values) {
+        return values.getLast().serialize();
     }
 
-    private void pSync(ClientState state) {
+    private byte[] pSync(ClientState state) {
         debug("Received PSYNC command");
         byte[] fullResyncResponse = new RespSimpleString("FULLRESYNC %s 0".formatted(config.getReplicationId())).serialize();
 
@@ -522,16 +565,17 @@ public class MainEventLoop implements AutoCloseable {
         System.arraycopy(rdbContent, 0, fullResponse, fullResyncResponse.length, rdbContent.length);
         debug("Sending response: %s", new String(rdbContent));
         replicationService.addReplica(((SocketChannel) state.key.channel()));
-        sendResponse(state, fullResponse);
+        return fullResponse;
     }
 
-    private void replConf(List<RespValue> values, ClientState state, RespArray array) throws IOException {
+    private byte[] replConf(List<RespValue> values, RespArray array) {
         debug("Received REPLCONF command: %s", values);
         String mode = ((RespBulkString) values.get(1)).value().toUpperCase();
         RespValue response = switch (mode) {
             case "ACK" -> {
                 var expectedOffset = replicationService.getOffset() - ACK_COMMAND.serialize().length;
                 var actualOffset = Integer.parseInt(((RespBulkString) values.get(2)).value());
+                debug("expected offset: %d, actual offset: %d", expectedOffset, actualOffset);
                 if (pendingWait != null && actualOffset == expectedOffset) {
                     pendingWait.receivedAcks++;
                 }
@@ -544,44 +588,41 @@ public class MainEventLoop implements AutoCloseable {
             default -> throw new RedisException("REPLCONF command requires a valid mode argument: " + mode);
         };
         if (config.getRole().equalsIgnoreCase("slave")) {
-            replicationService.moveOffset(array.serialize().length);
+            long previous = replicationService.getOffset();
+            replicationService.moveOffset(array.getSize());
+            debug("manipulating offset by as replica: %d-%d-%d", previous, array.getSize(), replicationService.getOffset());
         }
-        if (response != null) {
-            sendResponse(state, response.serialize());
-        }
+        return response == null ? null : response.serialize();
     }
 
-    private void info(ClientState state) {
+    private byte[] info() {
         debug("Received INFO command");
-        RespBulkString response = config.getRole().equalsIgnoreCase("master")
+        return (config.getRole().equalsIgnoreCase("master")
                 ? new RespBulkString("role:%s\r\nmaster_repl_offset:0\r\nmaster_replid:%s".formatted(config.getRole(), config.getReplicationId()))
-                : new RespBulkString("role:%s".formatted(config.getRole()));
-        sendResponse(state, response.serialize());
+                : new RespBulkString("role:%s".formatted(config.getRole()))).serialize();
     }
 
-    private void keys(ClientState state) {
+    private byte[] keys() {
         debug("Received KEYS command");
-        sendResponse(state, new RespArray(cache.getPersistedKeys()).serialize());
+        return new RespArray(cache.getPersistedKeys()).serialize();
     }
 
-    private void configGet(List<RespValue> values, ClientState state) {
+    private byte[] configGet(List<RespValue> values) {
         String pattern = ((RespBulkString) values.get(2)).value();
-        RespArray response = new RespArray(List.of(
+        return new RespArray(List.of(
                 new RespBulkString(pattern),
                 new RespBulkString(pattern.equalsIgnoreCase("dir")
                         ? config.getDir()
-                        : config.getDbFileName())));
-        debug("CONFIG GET command received, returning configuration.");
-        sendResponse(state, response.serialize());
+                        : config.getDbFileName()))).serialize();
     }
 
-    private void get(List<RespValue> values, ClientState state) {
+    private byte[] get(List<RespValue> values) {
         RespBulkString getKey = ((RespBulkString) values.get(1));
         CachedValue<RespValue> cachedValue = cache.get(getKey);
-        sendResponse(state, cachedValue.getValue().serialize());
+        return cachedValue.getValue().serialize();
     }
 
-    private void set(List<RespValue> values, ClientState state, RespArray array) throws IOException {
+    private byte[] set(List<RespValue> values, RespArray array) throws IOException {
         if (values.size() >= 3) {
             boolean isMaster = config.getRole().equalsIgnoreCase("master");
             if (isMaster) {
@@ -598,11 +639,14 @@ public class MainEventLoop implements AutoCloseable {
             }
             if (isMaster) {
                 replicationService.propagate(array, selector);
-                sendResponse(state, new RespSimpleString("OK").serialize());
+                return OK;
             } else {
+                long previous = replicationService.getOffset();
                 replicationService.moveOffset(array.getSize());
+                debug("manipulating offset by as replica: %d-%d-%d", previous, array.getSize(), replicationService.getOffset());
             }
         }
+        return null;
     }
 
     private void handleWrite(SelectionKey key) throws IOException {
