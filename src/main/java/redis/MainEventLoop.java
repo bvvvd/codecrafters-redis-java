@@ -276,8 +276,24 @@ public class MainEventLoop implements AutoCloseable {
             case "PUBLISH" -> publish(values);
             case "UNSUBSCRIBE" -> unsubscribe(values, state);
             case "ZADD" -> zAdd(values);
+            case "ZRANK" -> zRank(values);
             default -> new RespSimpleString("ERR unknown command").serialize();
         };
+    }
+
+    private byte[] zRank(List<RespValue> values) {
+        RespValue key = values.get(1);
+        RespValue value = values.get(2);
+        RedisSortedSet redisSortedSet = sortedSets.get(key);
+        if (redisSortedSet == null) {
+            return new RespBulkString(null).serialize();
+        }
+
+        long rank = redisSortedSet.rank(value);
+        if (rank == -1) {
+            return new RespBulkString(null).serialize();
+        }
+        return new RespInteger(rank).serialize();
     }
 
     private byte[] zAdd(List<RespValue> values) {
