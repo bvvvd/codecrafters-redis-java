@@ -285,7 +285,7 @@ public class MainEventLoop implements AutoCloseable {
 
     private byte[] zCard(List<RespValue> values) {
         RespValue key = values.get(1);
-        if (sortedSets.containsKey(key)) {
+        if (!sortedSets.containsKey(key)) {
             return new RespInteger(0).serialize();
         }
 
