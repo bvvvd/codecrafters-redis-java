@@ -18,15 +18,23 @@ public class RedisSortedSet {
         valueToScoreMap = new HashMap<>();
     }
 
-    public void add(RespValue value, double score) {
+    public boolean add(RespValue value, double score) {
         ScoredValue scoredValue = new ScoredValue(score, value);
-        priority.add(scoredValue);
-        scoreToValueMap.put(score, value);
-        valueToScoreMap.put(value, score);
-    }
-
-    public long size() {
-        return scoreToValueMap.size();
+        if (valueToScoreMap.containsKey(value)) {
+            Double oldScore = valueToScoreMap.get(value);
+            ScoredValue oldScoredValue = new ScoredValue(oldScore, value);
+            priority.remove(oldScoredValue);
+            scoreToValueMap.remove(oldScore);
+            scoreToValueMap.put(score, value);
+            valueToScoreMap.put(value, score);
+            priority.add(scoredValue);
+            return false;
+        } else {
+            priority.add(scoredValue);
+            scoreToValueMap.put(score, value);
+            valueToScoreMap.put(value, score);
+            return false;
+        }
     }
 
     private record ScoredValue(double score, RespValue value) {

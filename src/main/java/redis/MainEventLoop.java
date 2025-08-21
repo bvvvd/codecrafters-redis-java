@@ -284,8 +284,8 @@ public class MainEventLoop implements AutoCloseable {
         RespValue key = values.get(1);
         double score = Double.parseDouble(((RespBulkString) values.get(2)).value());
         RespValue value = values.get(3);
-        sortedSets.computeIfAbsent(key, k -> new RedisSortedSet()).add(value, score);
-        return new RespInteger(sortedSets.get(key).size()).serialize();
+        boolean added = sortedSets.computeIfAbsent(key, k -> new RedisSortedSet()).add(value, score);
+        return new RespInteger(added ? 1 : 0).serialize();
     }
 
     private byte[] unsubscribe(List<RespValue> values, ClientState state) {
