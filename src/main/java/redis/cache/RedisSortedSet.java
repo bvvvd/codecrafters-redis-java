@@ -33,7 +33,7 @@ public class RedisSortedSet {
             priority.add(scoredValue);
             scoreToValueMap.put(score, value);
             valueToScoreMap.put(value, score);
-            return false;
+            return true;
         }
     }
 
