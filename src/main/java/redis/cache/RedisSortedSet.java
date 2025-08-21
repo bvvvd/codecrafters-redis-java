@@ -75,6 +75,18 @@ public class RedisSortedSet {
         return score == null ? new RespBulkString(null) : new RespBulkString(score.toString());
     }
 
+    public RespValue remove(RespValue value) {
+        Double score = valueToScoreMap.get(value);
+        if (score == null) {
+            return new RespInteger(0);
+        }
+
+        valueToScoreMap.remove(value);
+        scoreToValueMap.remove(new ScoredValue(score, value));
+
+        return new RespInteger(1);
+    }
+
     private record ScoredValue(double score, RespValue value) {
 
     }
