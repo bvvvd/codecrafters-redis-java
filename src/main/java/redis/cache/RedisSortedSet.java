@@ -2,6 +2,7 @@ package redis.cache;
 
 import redis.resp.RespArray;
 import redis.resp.RespBulkString;
+import redis.resp.RespInteger;
 import redis.resp.RespValue;
 
 import java.util.*;
@@ -63,6 +64,10 @@ public class RedisSortedSet {
         }
 
         return index;
+    }
+
+    public RespValue size() {
+        return new RespInteger(scoreToValueMap.size());
     }
 
     private record ScoredValue(double score, RespValue value) {
