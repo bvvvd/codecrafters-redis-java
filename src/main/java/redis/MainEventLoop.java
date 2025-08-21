@@ -272,8 +272,16 @@ public class MainEventLoop implements AutoCloseable {
             case "SUBSCRIBE" -> subscribe(values, state);
             case "PUBLISH" -> publish(values);
             case "UNSUBSCRIBE" -> unsubscribe(values, state);
+            case "ZADD" -> zAdd(values);
             default -> new RespSimpleString("ERR unknown command").serialize();
         };
+    }
+
+    private byte[] zAdd(List<RespValue> values) {
+        RespValue key = values.get(1);
+        double score = Double.parseDouble(((RespBulkString) values.get(2)).value());
+        RespValue value = values.get(3);
+        return new RespInteger(1).serialize();
     }
 
     private byte[] unsubscribe(List<RespValue> values, ClientState state) {

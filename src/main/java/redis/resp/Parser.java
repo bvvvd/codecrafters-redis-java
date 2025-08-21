@@ -5,7 +5,6 @@ import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static redis.util.Logger.debug;
 
 public class Parser {
 
