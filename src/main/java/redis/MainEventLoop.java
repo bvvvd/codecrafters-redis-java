@@ -277,8 +277,20 @@ public class MainEventLoop implements AutoCloseable {
             case "UNSUBSCRIBE" -> unsubscribe(values, state);
             case "ZADD" -> zAdd(values);
             case "ZRANK" -> zRank(values);
+            case "ZRANGE" -> zRange(values);
             default -> new RespSimpleString("ERR unknown command").serialize();
         };
+    }
+
+    private byte[] zRange(List<RespValue> values) {
+        RespValue key = values.get(1);
+        RedisSortedSet redisSortedSet = sortedSets.get(key);
+        if (redisSortedSet == null) {
+            return new RespArray(List.of()).serialize();
+        }
+        int start = Integer.parseInt(((RespBulkString) values.get(2)).value());
+        int end = Integer.parseInt(((RespBulkString) values.get(3)).value());
+        return redisSortedSet.range(start, end).serialize();
     }
 
     private byte[] zRank(List<RespValue> values) {

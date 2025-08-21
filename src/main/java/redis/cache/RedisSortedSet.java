@@ -1,12 +1,10 @@
 package redis.cache;
 
+import redis.resp.RespArray;
 import redis.resp.RespBulkString;
 import redis.resp.RespValue;
 
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.TreeSet;
+import java.util.*;
 
 public class RedisSortedSet {
     private final TreeSet<ScoredValue> scoreToValueMap;
@@ -41,6 +39,17 @@ public class RedisSortedSet {
 
         ScoredValue scoredValue = new ScoredValue(score, value);
         return scoreToValueMap.headSet(scoredValue).size();
+    }
+
+    public RespArray range(int start, int end) {
+        if (start > end) {
+            return new RespArray(List.of());
+        }
+        return new RespArray(
+                scoreToValueMap.stream()
+                        .skip(start)
+                        .limit(end - start + 1)
+                        .map(ScoredValue::value).toList());
     }
 
     private record ScoredValue(double score, RespValue value) {
