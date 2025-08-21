@@ -42,6 +42,8 @@ public class RedisSortedSet {
     }
 
     public RespArray range(int start, int end) {
+        start = normalize(start);
+        end = normalize(end);
         if (start > end) {
             return new RespArray(List.of());
         }
@@ -50,6 +52,17 @@ public class RedisSortedSet {
                         .skip(start)
                         .limit(end - start + 1)
                         .map(ScoredValue::value).toList());
+    }
+
+    private int normalize(int index) {
+        if (index < 0) {
+            if (-index > scoreToValueMap.size()) {
+                return 0;
+            }
+            return (index % scoreToValueMap.size()) + scoreToValueMap.size();
+        }
+
+        return index;
     }
 
     private record ScoredValue(double score, RespValue value) {
