@@ -2,6 +2,7 @@ package redis;
 
 import redis.cache.Cache;
 import redis.cache.CachedValue;
+import redis.cache.RedisSortedSet;
 import redis.cache.StreamCache;
 import redis.config.RedisConfig;
 import redis.exception.RedisException;
@@ -42,6 +43,7 @@ public class MainEventLoop implements AutoCloseable {
     private final Map<List<RespValue>, PendingWait> xReadWaiters;
     private final Map<ClientState, Queue<RespArray>> transactions;
     private final Map<ClientState, Set<RespValue>> pubSub;
+    private final Map<RespValue, RedisSortedSet> sortedSets;
 
     public MainEventLoop(RedisConfig redisConfig, Cache cache, StreamCache streams) throws IOException {
         selector = Selector.open();
@@ -60,6 +62,7 @@ public class MainEventLoop implements AutoCloseable {
         xReadWaiters = new HashMap<>();
         transactions = new HashMap<>();
         pubSub = new HashMap<>();
+        sortedSets = new HashMap<>();
     }
 
     public void serve() throws IOException {
@@ -281,7 +284,8 @@ public class MainEventLoop implements AutoCloseable {
         RespValue key = values.get(1);
         double score = Double.parseDouble(((RespBulkString) values.get(2)).value());
         RespValue value = values.get(3);
-        return new RespInteger(1).serialize();
+        sortedSets.computeIfAbsent(key, k -> new RedisSortedSet()).add(value, score);
+        return new RespInteger(sortedSets.get(key).size()).serialize();
     }
 
     private byte[] unsubscribe(List<RespValue> values, ClientState state) {
