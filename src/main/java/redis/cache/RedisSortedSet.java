@@ -70,6 +70,11 @@ public class RedisSortedSet {
         return new RespInteger(scoreToValueMap.size());
     }
 
+    public RespValue score(RespValue value) {
+        Double score = valueToScoreMap.get(value);
+        return score == null ? new RespBulkString(null) : new RespBulkString(score.toString());
+    }
+
     private record ScoredValue(double score, RespValue value) {
 
     }

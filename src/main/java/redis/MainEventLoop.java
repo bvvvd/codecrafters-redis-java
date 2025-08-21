@@ -279,8 +279,19 @@ public class MainEventLoop implements AutoCloseable {
             case "ZRANK" -> zRank(values);
             case "ZRANGE" -> zRange(values);
             case "ZCARD" -> zCard(values);
+            case "ZSCORE" -> zScore(values);
             default -> new RespSimpleString("ERR unknown command").serialize();
         };
+    }
+
+    private byte[] zScore(List<RespValue> values) {
+        RespValue key = values.get(1);
+        if (!sortedSets.containsKey(key)) {
+            return new RespBulkString(null).serialize();
+        }
+
+        RespValue value = values.get(2);
+        return sortedSets.get(key).score(value).serialize();
     }
 
     private byte[] zCard(List<RespValue> values) {
